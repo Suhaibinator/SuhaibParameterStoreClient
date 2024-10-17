@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package parameterstore;
+
+service ParameterStore {
+    rpc Store(StoreRequest) returns (StoreResponse) {}
+    rpc Retrieve(RetrieveRequest) returns (RetrieveResponse) {}
+    rpc AddAccess(AddAccessRequest) returns (AddAccessResponse) {}
+}
+
+message StoreRequest {
+    string key = 1;
+    string value = 2;
+    string password = 3;
+}
+
+message StoreResponse {
+    string message = 1;
+}
+
+message RetrieveRequest {
+    string key = 1;
+    string password = 2;
+}
+
+message RetrieveResponse {
+    string value = 1;
+}
+
+message AddAccessRequest {
+    string password = 1;
+    string key = 2;
+    string masterPassword = 3;
+}
+
+message AddAccessResponse {
+    string message = 1;
+}
