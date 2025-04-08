@@ -1,0 +1,36 @@
+name: Go CI
+
+on:
+  push:
+    branches: [ main ] # Or your default branch name
+  pull_request:
+    branches: [ main ] # Or your default branch name
+
+jobs:
+  build-and-test:
+    name: Build and Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Specify Go versions if needed, e.g.:
+        # go-version: ['1.21', '1.22']
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        # Specify the Go version you want to use
+        go-version: '1.24' # Or use matrix.go-version if defined above
+      id: go # Optional: give the step an ID to reference outputs
+
+    - name: Build
+      # The -v flag provides verbose output
+      run: go build -v ./...
+
+    - name: Test
+      # The -v flag provides verbose output for tests
+      run: go test -v ./...
