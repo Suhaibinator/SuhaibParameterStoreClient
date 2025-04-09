@@ -37,6 +37,8 @@ type ParameterStoreConfig struct {
 	// ParameterStoreValue holds the retrieved value after initialization.
 	// It can also be pre-populated, in which case Init() will not overwrite it.
 	ParameterStoreValue string `json:"parameter_store_value" yaml:"parameter_store_value" toml:"parameter_store_value"`
+	// ParameterStoreUseEmptyValue indicates whether to use an empty value if value is an empty string.
+	ParameterStoreUseEmptyValue bool `json:"parameter_store_use_empty_value" yaml:"parameter_store_use_empty_value" toml:"parameter_store_use_empty_value"`
 }
 
 // simpleRetrieveParameterWithTimeout retrieves a parameter from the parameter store via gRPC with a specified timeout
@@ -117,6 +119,11 @@ func (c *ParameterStoreConfig) Init(paramStoreHost string, paramStorePort int, p
 	if c.ParameterStoreValue != "" {
 		return
 	}
+	if c.ParameterStoreUseEmptyValue {
+		// If the use empty value flag is set, return immediately.
+		return
+	}
+	// If the value is empty, we need to retrieve it.
 
 	// Use setValueIfEmpty to populate ParameterStoreValue based on the defined priority.
 	// Pass the necessary connection details and the struct's fields.
