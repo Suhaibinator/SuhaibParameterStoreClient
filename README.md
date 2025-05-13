@@ -92,7 +92,7 @@ func main() {
 		APIKey: config.ParameterStoreConfig{
 			ParameterStoreKey:     "my-app/api-key",       // Key in the parameter store
 			ParameterStoreSecret:  "your-secret-password", // Password for the store
-			EnvirnmentVariableKey: "MY_APP_API_KEY_ENV",   // Fallback environment variable
+			EnvironmentVariableKey: "MY_APP_API_KEY_ENV",   // Fallback environment variable
 			// ParameterStoreValue can be pre-filled to skip retrieval
 		},
 	}
@@ -109,7 +109,6 @@ func main() {
 }
 
 ```
-*(Note the intentional typo `EnvirnmentVariableKey` in the struct field tag as required by the original code).*
 
 ## Testing
 
