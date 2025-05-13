@@ -145,7 +145,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(), // Ensure connection attempt is synchronous for test
 		}
-		val, err := GrpcimpleRetrieve(ctxBg, "bufnet", mockPassword, mockKey, opts...)
+		val, err := GrpcimpleRetrieve(ctxBg, "bufnet", mockPassword, "", "", "", mockKey, opts...)
 
 		assert.NoError(t, err)
 		assert.Equal(t, mockValue, val)
@@ -161,7 +161,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(),
 		}
-		_, err := GrpcimpleRetrieve(ctxBg, "bufnet", "wrongpass", mockKey, opts...)
+		_, err := GrpcimpleRetrieve(ctxBg, "bufnet", "wrongpass", "", "", "", mockKey, opts...)
 
 		assert.Error(t, err)
 		// _, ok := status.FromError(err) // Remove unused st, ok
@@ -180,7 +180,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(),
 		}
-		_, err := GrpcimpleRetrieve(ctxBg, "bufnet", mockPassword, "nonexistentkey", opts...)
+		_, err := GrpcimpleRetrieve(ctxBg, "bufnet", mockPassword, "", "", "", "nonexistentkey", opts...)
 
 		assert.Error(t, err)
 		// _, ok := status.FromError(err) // Remove unused st, ok
@@ -199,7 +199,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(),
 		}
-		_, err := GrpcimpleRetrieve(ctxBg, "bufnet", mockPassword, mockKey, opts...)
+		_, err := GrpcimpleRetrieve(ctxBg, "bufnet", mockPassword, "", "", "", mockKey, opts...)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "internal server failure", "Error message should contain simulated error")
@@ -221,7 +221,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(),
 		}
-		_, err := GrpcimpleRetrieve(ctx, "bufnet", mockPassword, mockKey, opts...)
+		_, err := GrpcimpleRetrieve(ctx, "bufnet", mockPassword, "", "", "", mockKey, opts...)
 
 		assert.Error(t, err)
 		// Check if the error is context deadline exceeded or contains the message
@@ -242,7 +242,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(), // Use WithBlock to make connection attempt respect context timeout
 		}
-		_, err := GrpcimpleRetrieve(ctx, "bufnet", mockPassword, mockKey, opts...)
+		_, err := GrpcimpleRetrieve(ctx, "bufnet", mockPassword, "", "", "", mockKey, opts...)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to connect", "Expected connection error")
@@ -272,7 +272,7 @@ func TestGrpcSimpleStore(t *testing.T) {
 			// grpc.WithBlock(), // Optional for store
 		}
 		ctxBg := context.Background() // Use background context for store tests
-		err := GrpcSimpleStore(ctxBg, "bufnet", mockPassword, mockKey, mockValue, opts...)
+		err := GrpcSimpleStore(ctxBg, "bufnet", mockPassword, "", "", "", mockKey, mockValue, opts...)
 
 		assert.NoError(t, err)
 		// Verify value was stored in the mock server
@@ -293,7 +293,7 @@ func TestGrpcSimpleStore(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		}
 		ctxBg := context.Background()
-		err := GrpcSimpleStore(ctxBg, "bufnet", "wrongpass", mockKey, mockValue, opts...)
+		err := GrpcSimpleStore(ctxBg, "bufnet", "wrongpass", "", "", "", mockKey, mockValue, opts...)
 
 		assert.Error(t, err)
 		// _, ok := status.FromError(err) // Remove unused st, ok
@@ -312,7 +312,7 @@ func TestGrpcSimpleStore(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		}
 		ctxBg := context.Background()
-		err := GrpcSimpleStore(ctxBg, "bufnet", mockPassword, mockKey, mockValue, opts...)
+		err := GrpcSimpleStore(ctxBg, "bufnet", mockPassword, "", "", "", mockKey, mockValue, opts...)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "internal store failure", "Error message should contain simulated error")
@@ -330,7 +330,7 @@ func TestGrpcSimpleStore(t *testing.T) {
 		// Use a context with timeout for connection error test to avoid hanging
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
-		err := GrpcSimpleStore(ctx, "bufnet", mockPassword, mockKey, mockValue, opts...)
+		err := GrpcSimpleStore(ctx, "bufnet", mockPassword, "", "", "", mockKey, mockValue, opts...)
 
 		assert.Error(t, err)
 		// The error might be context deadline exceeded or a connection error depending on timing
