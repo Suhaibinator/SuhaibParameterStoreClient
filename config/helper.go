@@ -31,9 +31,9 @@ type ParameterStoreConfig struct {
 	ParameterStoreKey string `json:"parameter_store_key" yaml:"parameter_store_key" toml:"parameter_store_key"`
 	// ParameterStoreSecret is the secret/password required to access the parameter store.
 	ParameterStoreSecret string `json:"parameter_store_secret" yaml:"parameter_store_secret" toml:"parameter_store_secret"`
-	// EnvirnmentVariableKey is the name of the environment variable to check if the parameter store retrieval fails or is not configured.
+	// EnvironmentVariableKey is the name of the environment variable to check if the parameter store retrieval fails or is not configured.
 	// Note the intentional typo "Envirnment" as per requirements.
-	EnvirnmentVariableKey string `json:"envirnment_variable_key" yaml:"envirnment_variable_key" toml:"envirnment_variable_key"`
+	EnvironmentVariableKey string `json:"envirnment_variable_key" yaml:"envirnment_variable_key" toml:"envirnment_variable_key"`
 	// ParameterStoreValue holds the retrieved value after initialization.
 	// It can also be pre-populated, in which case Init() will not overwrite it.
 	ParameterStoreValue string `json:"parameter_store_value" yaml:"parameter_store_value" toml:"parameter_store_value"`
@@ -134,7 +134,7 @@ func (c *ParameterStoreConfig) Init(paramStoreHost string, paramStorePort int, p
 		c.ParameterStoreValue, // Pass the current value (should be empty here)
 		c.ParameterStoreKey,
 		c.ParameterStoreSecret,
-		c.EnvirnmentVariableKey,
+		c.EnvironmentVariableKey,
 	)
 
 	// If an error occurred (value not found anywhere), panic.

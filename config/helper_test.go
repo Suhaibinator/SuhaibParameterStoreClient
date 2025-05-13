@@ -68,10 +68,10 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 		{
 			name: "Value already present",
 			initialConfig: ParameterStoreConfig{
-				ParameterStoreKey:     testKey,
-				ParameterStoreSecret:  testSecret,
-				EnvirnmentVariableKey: testEnvKey,
-				ParameterStoreValue:   "pre-filled-value",
+				ParameterStoreKey:      testKey,
+				ParameterStoreSecret:   testSecret,
+				EnvironmentVariableKey: testEnvKey,
+				ParameterStoreValue:    "pre-filled-value",
 			},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				return "", errors.New("should not be called") // Should not be called
@@ -85,10 +85,10 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 		{
 			name: "Success from Parameter Store",
 			initialConfig: ParameterStoreConfig{
-				ParameterStoreKey:     testKey,
-				ParameterStoreSecret:  testSecret,
-				EnvirnmentVariableKey: testEnvKey,
-				ParameterStoreValue:   "", // Initially empty
+				ParameterStoreKey:      testKey,
+				ParameterStoreSecret:   testSecret,
+				EnvironmentVariableKey: testEnvKey,
+				ParameterStoreValue:    "", // Initially empty
 			},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				assert.Equal(t, testKey, key)
@@ -105,10 +105,10 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 		{
 			name: "Parameter Store Timeout, Success from Env Var",
 			initialConfig: ParameterStoreConfig{
-				ParameterStoreKey:     testKey,
-				ParameterStoreSecret:  testSecret,
-				EnvirnmentVariableKey: testEnvKey,
-				ParameterStoreValue:   "",
+				ParameterStoreKey:      testKey,
+				ParameterStoreSecret:   testSecret,
+				EnvironmentVariableKey: testEnvKey,
+				ParameterStoreValue:    "",
 			},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				// Simulate timeout
@@ -129,10 +129,10 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 		{
 			name: "Parameter Store Error (non-timeout), Success from Env Var",
 			initialConfig: ParameterStoreConfig{
-				ParameterStoreKey:     testKey,
-				ParameterStoreSecret:  testSecret,
-				EnvirnmentVariableKey: testEnvKey,
-				ParameterStoreValue:   "",
+				ParameterStoreKey:      testKey,
+				ParameterStoreSecret:   testSecret,
+				EnvironmentVariableKey: testEnvKey,
+				ParameterStoreValue:    "",
 			},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				return "", errors.New("some-grpc-error")
@@ -147,10 +147,10 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 		{
 			name: "Parameter Store returns empty string, Success from Env Var",
 			initialConfig: ParameterStoreConfig{
-				ParameterStoreKey:     testKey,
-				ParameterStoreSecret:  testSecret,
-				EnvirnmentVariableKey: testEnvKey,
-				ParameterStoreValue:   "",
+				ParameterStoreKey:      testKey,
+				ParameterStoreSecret:   testSecret,
+				EnvironmentVariableKey: testEnvKey,
+				ParameterStoreValue:    "",
 			},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				return "", nil // Success, but empty value
@@ -165,10 +165,10 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 		{
 			name: "Parameter Store Fails, Env Var Fails (Expect Panic)",
 			initialConfig: ParameterStoreConfig{
-				ParameterStoreKey:     testKey,
-				ParameterStoreSecret:  testSecret,
-				EnvirnmentVariableKey: testEnvKey,
-				ParameterStoreValue:   "",
+				ParameterStoreKey:      testKey,
+				ParameterStoreSecret:   testSecret,
+				EnvironmentVariableKey: testEnvKey,
+				ParameterStoreValue:    "",
 			},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				return "", errors.New("param-store-failed")
