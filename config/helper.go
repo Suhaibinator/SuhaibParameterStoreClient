@@ -16,7 +16,7 @@ import (
 
 // grpcRetrieveFunc defines the signature for the gRPC retrieve function dependency.
 // It's initialized with the actual client implementation but can be replaced in tests.
-var grpcRetrieveFunc func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) = client.GrpcimpleRetrieve
+var grpcRetrieveFunc func(ctx context.Context, ServerAddress string, AuthenticationPassword string, caCertPath string, clientCertPath string, clientKeyPath string, key string, opts ...grpc.DialOption) (val string, err error) = client.GrpcimpleRetrieve
 
 // osGetenvFunc defines the signature for the os.Getenv function dependency.
 // It's initialized with the actual os.Getenv but can be replaced in tests.
@@ -39,11 +39,18 @@ type ParameterStoreConfig struct {
 	ParameterStoreValue string `json:"parameter_store_value" yaml:"parameter_store_value" toml:"parameter_store_value"`
 	// ParameterStoreUseEmptyValue indicates whether to use an empty value if value is an empty string.
 	ParameterStoreUseEmptyValue bool `json:"parameter_store_use_empty_value" yaml:"parameter_store_use_empty_value" toml:"parameter_store_use_empty_value"`
+	// CACertPath is the path to the CA certificate file for mTLS.
+	CACertPath string `json:"ca_cert_path,omitempty" yaml:"ca_cert_path,omitempty" toml:"ca_cert_path,omitempty"`
+	// ClientCertPath is the path to the client certificate file for mTLS.
+	ClientCertPath string `json:"client_cert_path,omitempty" yaml:"client_cert_path,omitempty" toml:"client_cert_path,omitempty"`
+	// ClientKeyPath is the path to the client key file for mTLS.
+	ClientKeyPath string `json:"client_key_path,omitempty" yaml:"client_key_path,omitempty" toml:"client_key_path,omitempty"`
 }
 
 // simpleRetrieveParameterWithTimeout retrieves a parameter from the parameter store via gRPC with a specified timeout
-// using context cancellation. It takes the host, port, timeout duration, secret, and key as arguments.
-func simpleRetrieveParameterWithTimeout(paramStoreHost string, paramStorePort int, parameterStoreTimeout time.Duration, parameterStoreSecret, parameterStoreKey string) (string, error) {
+// using context cancellation. It takes the host, port, timeout duration, secret, key, and certificate paths for mTLS.
+func simpleRetrieveParameterWithTimeout(paramStoreHost string, paramStorePort int, parameterStoreTimeout time.Duration,
+	parameterStoreSecret, caCertPath, clientCertPath, clientKeyPath, parameterStoreKey string) (string, error) {
 	// Create a context with the specified timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), parameterStoreTimeout)
 	// Ensure the context is cancelled to release resources, even if the call returns early.
@@ -53,7 +60,7 @@ func simpleRetrieveParameterWithTimeout(paramStoreHost string, paramStorePort in
 	serverAddress := fmt.Sprintf("%s:%v", paramStoreHost, paramStorePort)
 
 	// Call the gRPC client function via the function variable for testability.
-	value, err := grpcRetrieveFunc(ctx, serverAddress, parameterStoreSecret, parameterStoreKey)
+	value, err := grpcRetrieveFunc(ctx, serverAddress, parameterStoreSecret, caCertPath, clientCertPath, clientKeyPath, parameterStoreKey)
 
 	// Check if the error is due to context deadline exceeded (timeout).
 	if err != nil && ctx.Err() == context.DeadlineExceeded {
@@ -72,7 +79,8 @@ func simpleRetrieveParameterWithTimeout(paramStoreHost string, paramStorePort in
 // 2. Retrieve from the parameter store using the provided key and secret.
 // 3. Retrieve from the environment variable using the provided environment variable key.
 // If all methods fail, it returns an error.
-func setValueIfEmpty(paramStoreHost string, paramStorePort int, parameterStoreTimeout time.Duration, value, parameterStoreKey, parameterStoreSecret, envVarKey string) (string, error) {
+func setValueIfEmpty(paramStoreHost string, paramStorePort int, parameterStoreTimeout time.Duration,
+	value, parameterStoreKey, parameterStoreSecret, caCertPath, clientCertPath, clientKeyPath, envVarKey string) (string, error) {
 	// If a value is already provided, return it immediately.
 	if value != "" {
 		return value, nil
@@ -80,7 +88,8 @@ func setValueIfEmpty(paramStoreHost string, paramStorePort int, parameterStoreTi
 
 	var err error
 	// Attempt to retrieve the value from the parameter store.
-	value, err = simpleRetrieveParameterWithTimeout(paramStoreHost, paramStorePort, parameterStoreTimeout, parameterStoreSecret, parameterStoreKey)
+	value, err = simpleRetrieveParameterWithTimeout(paramStoreHost, paramStorePort, parameterStoreTimeout,
+		parameterStoreSecret, caCertPath, clientCertPath, clientKeyPath, parameterStoreKey)
 	if err == nil && value != "" {
 		// If retrieval was successful and value is not empty, return it.
 		log.Printf("Retrieved value for key '%s' from parameter store.", parameterStoreKey)
@@ -134,6 +143,9 @@ func (c *ParameterStoreConfig) Init(paramStoreHost string, paramStorePort int, p
 		c.ParameterStoreValue, // Pass the current value (should be empty here)
 		c.ParameterStoreKey,
 		c.ParameterStoreSecret,
+		c.CACertPath,
+		c.ClientCertPath,
+		c.ClientKeyPath,
 		c.EnvironmentVariableKey,
 	)
 

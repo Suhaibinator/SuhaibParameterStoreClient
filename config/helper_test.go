@@ -16,7 +16,7 @@ import (
 // --- Mocks ---
 
 // Store original functions to restore them after tests
-var originalGrpcRetrieveFunc func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error)
+var originalGrpcRetrieveFunc func(ctx context.Context, ServerAddress string, AuthenticationPassword string, caCertPath string, clientCertPath string, clientKeyPath string, key string, opts ...grpc.DialOption) (val string, err error)
 var originalOsGetenvFunc func(key string) string
 var mu sync.Mutex // Mutex to protect access to global function variables
 
@@ -37,7 +37,7 @@ func teardownTest() {
 }
 
 // Define types for our mock functions for clarity
-type mockGrpcRetrieveFunc func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error)
+type mockGrpcRetrieveFunc func(ctx context.Context, ServerAddress string, AuthenticationPassword string, caCertPath string, clientCertPath string, clientKeyPath string, key string, opts ...grpc.DialOption) (val string, err error)
 type mockGetenvFunc func(key string) string
 
 // --- Tests ---
