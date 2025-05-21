@@ -4,25 +4,31 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os" // Added for os.ReadFile
 
+	psconfig "github.com/Suhaibinator/SuhaibParameterStoreClient/config" // Added import
 	pb "github.com/Suhaibinator/SuhaibParameterStoreClient/proto"
 
 	"time"
 
 	"crypto/tls"
 	"crypto/x509"
-	"io/ioutil"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+func init() {
+	// Initialize the function pointers in the config package.
+	// This breaks the import cycle by allowing config to call client functions
+	// without config directly importing client for assignment.
+	psconfig.GrpcSimpleRetrieveFunc = GrpcimpleRetrieve // GrpcimpleRetrieve is the actual name in this file
+	psconfig.GrpcSimpleRetrieveWithMTLSFunc = GrpcSimpleRetrieveWithMTLS
+}
+
 // Default timeout for gRPC operations if no context deadline is set.
 const defaultGrpcTimeout = 5 * time.Second
-
-// grpcDialContext allows tests to override grpc.DialContext.
-var grpcDialContext = grpc.DialContext
 
 // GrpcimpleRetrieve retrieves a value from the parameter store using gRPC.
 // It accepts a context for timeout/cancellation control and optional grpc.DialOptions.
@@ -42,9 +48,17 @@ func GrpcimpleRetrieve(ctx context.Context, ServerAddress string, Authentication
 	// Append any additional options passed by the caller.
 	allOpts := append(defaultOpts, opts...)
 
-	// Create a client connection to the gRPC server using the combined options and context.
-	// Use DialContext to respect the context deadline during connection attempt.
-	conn, err := grpcDialContext(ctx, ServerAddress, allOpts...)
+	// Check if the context is already done before attempting to dial.
+	if err := ctx.Err(); err != nil {
+		log.Printf("gRPC dial context for %s already expired/canceled: %v", ServerAddress, err)
+		return "", fmt.Errorf("gRPC dial context for %s already expired/canceled: %w", ServerAddress, err)
+	}
+
+	// Create a client connection to the gRPC server using the combined options.
+	// Using grpc.DialContext to respect context timeout
+	// If grpc.WithBlock() is in allOpts, the dial operation will block until connection is established
+	// or the context times out.
+	conn, err := grpc.DialContext(ctx, ServerAddress, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return "", fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)
@@ -75,8 +89,8 @@ func GrpcimpleRetrieve(ctx context.Context, ServerAddress string, Authentication
 }
 
 // GrpcSimpleRetrieveWithMTLS retrieves a value from the parameter store using gRPC with mTLS.
-// It accepts a context for timeout/cancellation control, certificate file paths, and optional grpc.DialOptions.
-func GrpcSimpleRetrieveWithMTLS(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientCertFile string, clientKeyFile string, caCertFile string, opts ...grpc.DialOption) (val string, err error) {
+// It accepts a context, server details, a key, a ParameterStoreClient config, and optional grpc.DialOptions.
+func GrpcSimpleRetrieveWithMTLS(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *psconfig.ParameterStoreClient, opts ...grpc.DialOption) (val string, err error) {
 	// Ensure context has a deadline.
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
@@ -84,27 +98,53 @@ func GrpcSimpleRetrieveWithMTLS(ctx context.Context, ServerAddress string, Authe
 		defer cancel()
 	}
 
-	// Load client's certificate and private key
-	clientCert, err := tls.LoadX509KeyPair(clientCertFile, clientKeyFile)
+	// Get certificate data using GetData methods from ParameterStoreClient's CertificateSource fields
+	clientCertBytes, err := clientConfig.ClientCert.GetData()
 	if err != nil {
-		log.Printf("Failed to load client cert: %v", err)
-		return "", fmt.Errorf("failed to load client cert: %w", err)
+		log.Printf("Failed to get client certificate data: %v", err)
+		return "", fmt.Errorf("failed to get client certificate data: %w", err)
+	}
+	if len(clientCertBytes) == 0 {
+		log.Printf("Client certificate data is empty")
+		return "", fmt.Errorf("client certificate data is empty")
 	}
 
-	// Load CA cert
-	caCert, err := ioutil.ReadFile(caCertFile)
+	clientKeyBytes, err := clientConfig.ClientKey.GetData()
 	if err != nil {
-		log.Printf("Failed to load CA cert: %v", err)
-		return "", fmt.Errorf("failed to load CA cert: %w", err)
+		log.Printf("Failed to get client key data: %v", err)
+		return "", fmt.Errorf("failed to get client key data: %w", err)
 	}
+	if len(clientKeyBytes) == 0 {
+		log.Printf("Client key data is empty")
+		return "", fmt.Errorf("client key data is empty")
+	}
+
+	// Create tls.Certificate from bytes
+	clientCertTLS, err := tls.X509KeyPair(clientCertBytes, clientKeyBytes)
+	if err != nil {
+		log.Printf("Failed to create client TLS certificate from bytes: %v", err)
+		return "", fmt.Errorf("failed to create client TLS certificate from bytes: %w", err)
+	}
+
+	// Get CA certificate data
+	caCertBytes, err := clientConfig.CACert.GetData()
+	if err != nil {
+		log.Printf("Failed to get CA certificate data: %v", err)
+		return "", fmt.Errorf("failed to get CA certificate data: %w", err)
+	}
+	if len(caCertBytes) == 0 {
+		log.Printf("CA certificate data is empty")
+		return "", fmt.Errorf("CA certificate data is empty")
+	}
+
 	caCertPool := x509.NewCertPool()
-	if ok := caCertPool.AppendCertsFromPEM(caCert); !ok {
-		log.Printf("Failed to append CA certs to the pool: no valid certificates found")
-		return "", fmt.Errorf("failed to append CA certs to the pool: no valid certificates found")
+	if ok := caCertPool.AppendCertsFromPEM(caCertBytes); !ok {
+		log.Printf("Failed to append CA certs to the pool from bytes: no valid certificates found")
+		return "", fmt.Errorf("failed to append CA certs to the pool from bytes: no valid certificates found")
 	}
 
 	creds := credentials.NewTLS(&tls.Config{
-		Certificates: []tls.Certificate{clientCert},
+		Certificates: []tls.Certificate{clientCertTLS},
 		RootCAs:      caCertPool,
 	})
 
@@ -115,8 +155,17 @@ func GrpcSimpleRetrieveWithMTLS(ctx context.Context, ServerAddress string, Authe
 	// Append any additional options passed by the caller.
 	allOpts := append(defaultOpts, opts...)
 
-	// Create a client connection to the gRPC server using the combined options and context.
-	conn, err := grpcDialContext(ctx, ServerAddress, allOpts...)
+	// Check if the context is already done before attempting to dial.
+	if err := ctx.Err(); err != nil {
+		log.Printf("gRPC dial context for %s already expired/canceled: %v", ServerAddress, err)
+		return "", fmt.Errorf("gRPC dial context for %s already expired/canceled: %w", ServerAddress, err)
+	}
+
+	// Create a client connection to the gRPC server using the combined options.
+	// Using grpc.DialContext to respect context timeout
+	// If grpc.WithBlock() is in allOpts, the dial operation will block until connection is established
+	// or the context times out.
+	conn, err := grpc.DialContext(ctx, ServerAddress, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return "", fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)
@@ -160,8 +209,17 @@ func GrpcSimpleStore(ctx context.Context, ServerAddress string, AuthenticationPa
 	// Append any additional options passed by the caller.
 	allOpts := append(defaultOpts, opts...)
 
-	// Create a client connection to the gRPC server using the combined options and context.
-	conn, err := grpcDialContext(ctx, ServerAddress, allOpts...)
+	// Check if the context is already done before attempting to dial.
+	if err := ctx.Err(); err != nil {
+		log.Printf("gRPC dial context for %s already expired/canceled: %v", ServerAddress, err)
+		return fmt.Errorf("gRPC dial context for %s already expired/canceled: %w", ServerAddress, err)
+	}
+
+	// Create a client connection to the gRPC server using the combined options.
+	// Using grpc.DialContext to respect context timeout
+	// If grpc.WithBlock() is in allOpts, the dial operation will block until connection is established
+	// or the context times out.
+	conn, err := grpc.DialContext(ctx, ServerAddress, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)
@@ -190,6 +248,8 @@ func GrpcSimpleStore(ctx context.Context, ServerAddress string, AuthenticationPa
 
 // GrpcSimpleStoreWithMTLS stores a key-value pair using gRPC with mTLS.
 // Accepts a context for timeout/cancellation, certificate file paths, and optional grpc.DialOptions.
+// TODO: This function also needs to be updated to use clientConfig *psconfig.ParameterStoreClient if it's intended to be used with the new config structure.
+// For now, leaving its signature as is, as it was not directly part of the user's request for the retrieve operation.
 func GrpcSimpleStoreWithMTLS(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, value string, clientCertFile string, clientKeyFile string, caCertFile string, opts ...grpc.DialOption) (err error) {
 	// Ensure context has a deadline.
 	if _, ok := ctx.Deadline(); !ok {
@@ -199,23 +259,23 @@ func GrpcSimpleStoreWithMTLS(ctx context.Context, ServerAddress string, Authenti
 	}
 
 	// Load client's certificate and private key
-	clientCert, err := tls.LoadX509KeyPair(clientCertFile, clientKeyFile)
+	clientCertTLS, err := tls.LoadX509KeyPair(clientCertFile, clientKeyFile) // Corrected variable name if this was a copy-paste error, should be clientCertTLS
 	if err != nil {
 		log.Printf("Failed to load client cert: %v", err)
 		return fmt.Errorf("failed to load client cert: %w", err)
 	}
 
 	// Load CA cert
-	caCert, err := ioutil.ReadFile(caCertFile)
+	caCertBytes, err := os.ReadFile(caCertFile) // Changed ioutil.ReadFile to os.ReadFile
 	if err != nil {
 		log.Printf("Failed to load CA cert: %v", err)
 		return fmt.Errorf("failed to load CA cert: %w", err)
 	}
 	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
+	caCertPool.AppendCertsFromPEM(caCertBytes) // Use caCertBytes
 
 	creds := credentials.NewTLS(&tls.Config{
-		Certificates: []tls.Certificate{clientCert},
+		Certificates: []tls.Certificate{clientCertTLS}, // Use clientCertTLS
 		RootCAs:      caCertPool,
 	})
 
@@ -226,8 +286,17 @@ func GrpcSimpleStoreWithMTLS(ctx context.Context, ServerAddress string, Authenti
 	// Append any additional options passed by the caller.
 	allOpts := append(defaultOpts, opts...)
 
-	// Create a client connection to the gRPC server using the combined options and context.
-	conn, err := grpcDialContext(ctx, ServerAddress, allOpts...)
+	// Check if the context is already done before attempting to dial.
+	if err := ctx.Err(); err != nil {
+		log.Printf("gRPC dial context for %s already expired/canceled: %v", ServerAddress, err)
+		return fmt.Errorf("gRPC dial context for %s already expired/canceled: %w", ServerAddress, err)
+	}
+
+	// Create a client connection to the gRPC server using the combined options.
+	// Using grpc.DialContext to respect context timeout
+	// If grpc.WithBlock() is in allOpts, the dial operation will block until connection is established
+	// or the context times out.
+	conn, err := grpc.DialContext(ctx, ServerAddress, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)

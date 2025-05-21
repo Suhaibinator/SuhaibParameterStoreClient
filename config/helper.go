@@ -7,17 +7,20 @@ import (
 	"log"
 	"os"
 
-	"github.com/Suhaibinator/SuhaibParameterStoreClient/client"
+	// "github.com/Suhaibinator/SuhaibParameterStoreClient/client" // Removed to break import cycle
 	"google.golang.org/grpc"
 )
 
 // --- Function variables for mocking dependencies ---
+// These are now declarations only. They must be initialized by an external package (e.g., main or client's init).
+// Exported for initialization from other packages.
 
-// grpcSimpleRetrieveFunc defines the signature for the non-mTLS gRPC retrieve function.
-var grpcSimpleRetrieveFunc func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) = client.GrpcimpleRetrieve
+// GrpcSimpleRetrieveFunc defines the signature for the non-mTLS gRPC retrieve function.
+var GrpcSimpleRetrieveFunc func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error)
 
-// grpcSimpleRetrieveWithMTLSFunc defines the signature for the mTLS gRPC retrieve function.
-var grpcSimpleRetrieveWithMTLSFunc func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientCertFile string, clientKeyFile string, caCertFile string, opts ...grpc.DialOption) (val string, err error) = client.GrpcSimpleRetrieveWithMTLS
+// GrpcSimpleRetrieveWithMTLSFunc defines the signature for the mTLS gRPC retrieve function.
+// The clientConfig parameter uses *ParameterStoreClient from the current (config) package.
+var GrpcSimpleRetrieveWithMTLSFunc func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error)
 
 // osGetenvFunc defines the signature for the os.Getenv function dependency.
 // It's initialized with the actual os.Getenv but can be replaced in tests.
