@@ -21,6 +21,9 @@ import (
 // Default timeout for gRPC operations if no context deadline is set.
 const defaultGrpcTimeout = 5 * time.Second
 
+// grpcDialContext allows tests to override grpc.DialContext.
+var grpcDialContext = grpc.DialContext
+
 // GrpcimpleRetrieve retrieves a value from the parameter store using gRPC.
 // It accepts a context for timeout/cancellation control and optional grpc.DialOptions.
 func GrpcimpleRetrieve(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) { //nolint:all // Existing function
@@ -41,7 +44,7 @@ func GrpcimpleRetrieve(ctx context.Context, ServerAddress string, Authentication
 
 	// Create a client connection to the gRPC server using the combined options and context.
 	// Use DialContext to respect the context deadline during connection attempt.
-	conn, err := grpc.DialContext(ctx, ServerAddress, allOpts...)
+	conn, err := grpcDialContext(ctx, ServerAddress, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return "", fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)
@@ -91,8 +94,8 @@ func GrpcSimpleRetrieveWithMTLS(ctx context.Context, ServerAddress string, Authe
 	// Load CA cert
 	caCert, err := ioutil.ReadFile(caCertFile)
 	if err != nil {
-		log.Printf("Failed to read CA cert: %v", err)
-		return "", fmt.Errorf("failed to read CA cert: %w", err)
+		log.Printf("Failed to load CA cert: %v", err)
+		return "", fmt.Errorf("failed to load CA cert: %w", err)
 	}
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
@@ -110,7 +113,7 @@ func GrpcSimpleRetrieveWithMTLS(ctx context.Context, ServerAddress string, Authe
 	allOpts := append(defaultOpts, opts...)
 
 	// Create a client connection to the gRPC server using the combined options and context.
-	conn, err := grpc.DialContext(ctx, ServerAddress, allOpts...)
+	conn, err := grpcDialContext(ctx, ServerAddress, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return "", fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)
@@ -155,7 +158,7 @@ func GrpcSimpleStore(ctx context.Context, ServerAddress string, AuthenticationPa
 	allOpts := append(defaultOpts, opts...)
 
 	// Create a client connection to the gRPC server using the combined options and context.
-	conn, err := grpc.DialContext(ctx, ServerAddress, allOpts...)
+	conn, err := grpcDialContext(ctx, ServerAddress, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)
@@ -202,8 +205,8 @@ func GrpcSimpleStoreWithMTLS(ctx context.Context, ServerAddress string, Authenti
 	// Load CA cert
 	caCert, err := ioutil.ReadFile(caCertFile)
 	if err != nil {
-		log.Printf("Failed to read CA cert: %v", err)
-		return fmt.Errorf("failed to read CA cert: %w", err)
+		log.Printf("Failed to load CA cert: %v", err)
+		return fmt.Errorf("failed to load CA cert: %w", err)
 	}
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
@@ -221,7 +224,7 @@ func GrpcSimpleStoreWithMTLS(ctx context.Context, ServerAddress string, Authenti
 	allOpts := append(defaultOpts, opts...)
 
 	// Create a client connection to the gRPC server using the combined options and context.
-	conn, err := grpc.DialContext(ctx, ServerAddress, allOpts...)
+	conn, err := grpcDialContext(ctx, ServerAddress, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)

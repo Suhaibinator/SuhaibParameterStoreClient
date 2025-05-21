@@ -14,6 +14,11 @@ import (
 	"testing"
 	"time"
 
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"math/big"
 	"os"
 
 	pb "github.com/Suhaibinator/SuhaibParameterStoreClient/proto" // Adjust import path if needed
@@ -364,34 +369,13 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 	originalDialContext := grpcDialContext // Store original
 	grpcDialContext = func(ctx context.Context, target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		dialOpts = opts
-		// Return a specific error to stop further processing in the tested function
-		// since we are not setting up a real server for this part.
-		return nil, fmt.Errorf("mock dial: connection refused")
+		// Return a specific gRPC error to stop further processing in the tested function.
+		return nil, status.Error(codes.Unavailable, "mock dial: connection refused")
 	}
 	defer func() { grpcDialContext = originalDialContext }() // Restore
 
-	tmpDir, err := os.MkdirTemp("", "testcerts")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	clientCertPath := filepath.Join(tmpDir, "client.pem")
-	clientKeyPath := filepath.Join(tmpDir, "client.key")
-	caCertPath := filepath.Join(tmpDir, "ca.pem")
-
-	// Create dummy cert files for positive path
-	dummyClientCertContent := `-----BEGIN CERTIFICATE-----
-dGVzdGNsaWVudGNlcnQ=
------END CERTIFICATE-----`
-	dummyClientKeyContent := `-----BEGIN PRIVATE KEY-----
-dGVzdGNsaWVudGtleQ==
------END PRIVATE KEY-----`
-	dummyCaCertContent := `-----BEGIN CERTIFICATE-----
-dGVzdGNhY2VydA==
------END CERTIFICATE-----`
-
-	assert.NoError(t, os.WriteFile(clientCertPath, []byte(dummyClientCertContent), 0600))
-	assert.NoError(t, os.WriteFile(clientKeyPath, []byte(dummyClientKeyContent), 0600))
-	assert.NoError(t, os.WriteFile(caCertPath, []byte(dummyCaCertContent), 0600))
+	clientCertPath, clientKeyPath, caCertPath, cleanup := createDummyCertFiles(t)
+	defer cleanup()
 
 	ctx := context.Background()
 
@@ -461,31 +445,12 @@ func TestGrpcSimpleStoreWithMTLS(t *testing.T) {
 	originalDialContext := grpcDialContext // Store original
 	grpcDialContext = func(ctx context.Context, target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		// dialOpts = opts // This was the unused variable assignment
-		return nil, fmt.Errorf("mock dial: connection refused")
+		return nil, status.Error(codes.Unavailable, "mock dial: connection refused")
 	}
 	defer func() { grpcDialContext = originalDialContext }() // Restore
 
-	tmpDir, err := os.MkdirTemp("", "testcerts-store")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	clientCertPath := filepath.Join(tmpDir, "client.pem")
-	clientKeyPath := filepath.Join(tmpDir, "client.key")
-	caCertPath := filepath.Join(tmpDir, "ca.pem")
-
-	dummyClientCertContent := `-----BEGIN CERTIFICATE-----
-dGVzdGNsaWVudGNlcnQ=
------END CERTIFICATE-----`
-	dummyClientKeyContent := `-----BEGIN PRIVATE KEY-----
-dGVzdGNsaWVudGtleQ==
------END PRIVATE KEY-----`
-	dummyCaCertContent := `-----BEGIN CERTIFICATE-----
-dGVzdGNhY2VydA==
------END CERTIFICATE-----`
-
-	assert.NoError(t, os.WriteFile(clientCertPath, []byte(dummyClientCertContent), 0600))
-	assert.NoError(t, os.WriteFile(clientKeyPath, []byte(dummyClientKeyContent), 0600))
-	assert.NoError(t, os.WriteFile(caCertPath, []byte(dummyCaCertContent), 0600))
+	clientCertPath, clientKeyPath, caCertPath, cleanup := createDummyCertFiles(t)
+	defer cleanup()
 
 	ctx := context.Background()
 
@@ -517,11 +482,41 @@ dGVzdGNhY2VydA==
 	t.Run("Missing CA cert", func(t *testing.T) {
 		err := GrpcSimpleStoreWithMTLS(ctx, "localhost:50051", "password", "key", "value", clientCertPath, clientKeyPath, "nonexistent.pem")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to read CA cert")
+		assert.Contains(t, err.Error(), "failed to load CA cert")
 	})
 }
 
-// This is a global variable to allow mocking grpc.DialContext for specific tests.
-// It's not ideal but helps in testing the options passed to DialContext without
-// a full gRPC server setup for mTLS.
-var grpcDialContext = grpc.DialContext
+// generateTestCertPair creates a temporary self-signed certificate and key pair for tests.
+func generateTestCertPair(t *testing.T) (certPEM, keyPEM []byte) {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	assert.NoError(t, err)
+	tmpl := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &key.PublicKey, key)
+	assert.NoError(t, err)
+	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	return
+}
+
+// createDummyCertFiles writes a temporary certificate, key and CA certificate to disk.
+// It returns the file paths and a cleanup function.
+func createDummyCertFiles(t *testing.T) (clientCertFile, clientKeyFile, caCertFile string, cleanup func()) {
+	t.Helper()
+	certPEM, keyPEM := generateTestCertPair(t)
+	dir, err := os.MkdirTemp("", "grpc-mtls-test-certs")
+	assert.NoError(t, err)
+	clientCertFile = filepath.Join(dir, "client.crt")
+	clientKeyFile = filepath.Join(dir, "client.key")
+	caCertFile = filepath.Join(dir, "ca.crt")
+	assert.NoError(t, os.WriteFile(clientCertFile, certPEM, 0600))
+	assert.NoError(t, os.WriteFile(clientKeyFile, keyPEM, 0600))
+	// reuse the same cert as CA cert
+	assert.NoError(t, os.WriteFile(caCertFile, certPEM, 0600))
+	cleanup = func() { os.RemoveAll(dir) }
+	return
+}
