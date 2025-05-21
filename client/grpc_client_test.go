@@ -1,5 +1,9 @@
 package client
 
+// Note: This test file intentionally uses some deprecated gRPC options like grpc.WithBlock()
+// for testing purposes. These options make tests more reliable and predictable by ensuring
+// synchronous connection attempts, but should be avoided in production code.
+
 import (
 	"context"
 	"errors"
@@ -10,18 +14,17 @@ import (
 	"testing"
 	"time"
 
+	"os"
+
 	pb "github.com/Suhaibinator/SuhaibParameterStoreClient/proto" // Adjust import path if needed
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
-	"io/ioutil"
-	"os"
 
 	"path/filepath"
 
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/test/bufconn"
 )
 
@@ -31,21 +34,6 @@ var (
 	// Keep track of the original grpcDialContext for restoration
 	originalGrpcDialContext = grpc.DialContext
 )
-
-// mockDialContext allows us to inspect the dial options passed to grpc.DialContext
-func mockDialContext(ctx context.Context, target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-	return nil, fmt.Errorf("mockDialContext: Dial attempted with target %s", target)
-}
-
-// Helper function to create dummy cert files for testing
-func createDummyFiles(t *testing.T, dir string, files ...string) {
-	t.Helper()
-	for _, file := range files {
-		filePath := filepath.Join(dir, file)
-		err := ioutil.WriteFile(filePath, []byte("dummy content for "+file), 0600)
-		assert.NoError(t, err, "Failed to write dummy file: %s", filePath)
-	}
-}
 
 var lis *bufconn.Listener
 
@@ -169,7 +157,8 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 		opts := []grpc.DialOption{
 			grpc.WithContextDialer(bufDialer),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(), // Ensure connection attempt is synchronous for test
+			grpc.WithBlock(), // Intentionally used for testing despite deprecation warning
+			// It ensures connection attempt is synchronous for test
 		}
 		val, err := GrpcimpleRetrieve(ctxBg, "bufnet", mockPassword, mockKey, opts...)
 
@@ -185,7 +174,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 		opts := []grpc.DialOption{
 			grpc.WithContextDialer(bufDialer),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
+			grpc.WithBlock(), // Intentionally used for testing despite deprecation warning
 		}
 		_, err := GrpcimpleRetrieve(ctxBg, "bufnet", "wrongpass", mockKey, opts...)
 
@@ -204,7 +193,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 		opts := []grpc.DialOption{
 			grpc.WithContextDialer(bufDialer),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
+			grpc.WithBlock(), // Intentionally used for testing despite deprecation warning
 		}
 		_, err := GrpcimpleRetrieve(ctxBg, "bufnet", mockPassword, "nonexistentkey", opts...)
 
@@ -223,7 +212,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 		opts := []grpc.DialOption{
 			grpc.WithContextDialer(bufDialer),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
+			grpc.WithBlock(), // Intentionally used for testing despite deprecation warning
 		}
 		_, err := GrpcimpleRetrieve(ctxBg, "bufnet", mockPassword, mockKey, opts...)
 
@@ -245,7 +234,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 		opts := []grpc.DialOption{
 			grpc.WithContextDialer(bufDialer),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
+			grpc.WithBlock(), // Intentionally used for testing despite deprecation warning
 		}
 		_, err := GrpcimpleRetrieve(ctx, "bufnet", mockPassword, mockKey, opts...)
 
@@ -266,7 +255,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 		opts := []grpc.DialOption{
 			grpc.WithContextDialer(bufDialer),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(), // Use WithBlock to make connection attempt respect context timeout
+			grpc.WithBlock(), // Intentionally used for testing despite deprecation warning - makes connection attempt respect context timeout
 		}
 		_, err := GrpcimpleRetrieve(ctx, "bufnet", mockPassword, mockKey, opts...)
 
@@ -381,7 +370,7 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 	}
 	defer func() { grpcDialContext = originalDialContext }() // Restore
 
-	tmpDir, err := ioutil.TempDir("", "testcerts")
+	tmpDir, err := os.MkdirTemp("", "testcerts")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -390,9 +379,19 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 	caCertPath := filepath.Join(tmpDir, "ca.pem")
 
 	// Create dummy cert files for positive path
-	assert.NoError(t, ioutil.WriteFile(clientCertPath, []byte("dummy cert data"), 0600))
-	assert.NoError(t, ioutil.WriteFile(clientKeyPath, []byte("dummy key data"), 0600))
-	assert.NoError(t, ioutil.WriteFile(caCertPath, []byte("dummy ca data"), 0600))
+	dummyClientCertContent := `-----BEGIN CERTIFICATE-----
+dGVzdGNsaWVudGNlcnQ=
+-----END CERTIFICATE-----`
+	dummyClientKeyContent := `-----BEGIN PRIVATE KEY-----
+dGVzdGNsaWVudGtleQ==
+-----END PRIVATE KEY-----`
+	dummyCaCertContent := `-----BEGIN CERTIFICATE-----
+dGVzdGNhY2VydA==
+-----END CERTIFICATE-----`
+
+	assert.NoError(t, os.WriteFile(clientCertPath, []byte(dummyClientCertContent), 0600))
+	assert.NoError(t, os.WriteFile(clientKeyPath, []byte(dummyClientKeyContent), 0600))
+	assert.NoError(t, os.WriteFile(caCertPath, []byte(dummyCaCertContent), 0600))
 
 	ctx := context.Background()
 
@@ -444,7 +443,7 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 	t.Run("Missing CA cert", func(t *testing.T) {
 		_, err := GrpcSimpleRetrieveWithMTLS(ctx, "localhost:50051", "password", "key", clientCertPath, clientKeyPath, "nonexistent.pem")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to read CA cert")
+		assert.Contains(t, err.Error(), "failed to load CA cert")
 	})
 
 	t.Run("Empty client cert path", func(t *testing.T) {
@@ -459,15 +458,14 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 }
 
 func TestGrpcSimpleStoreWithMTLS(t *testing.T) {
-	var dialOpts []grpc.DialOption
 	originalDialContext := grpcDialContext // Store original
 	grpcDialContext = func(ctx context.Context, target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-		dialOpts = opts
+		// dialOpts = opts // This was the unused variable assignment
 		return nil, fmt.Errorf("mock dial: connection refused")
 	}
 	defer func() { grpcDialContext = originalDialContext }() // Restore
 
-	tmpDir, err := ioutil.TempDir("", "testcerts-store")
+	tmpDir, err := os.MkdirTemp("", "testcerts-store")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -475,14 +473,24 @@ func TestGrpcSimpleStoreWithMTLS(t *testing.T) {
 	clientKeyPath := filepath.Join(tmpDir, "client.key")
 	caCertPath := filepath.Join(tmpDir, "ca.pem")
 
-	assert.NoError(t, ioutil.WriteFile(clientCertPath, []byte("dummy cert data"), 0600))
-	assert.NoError(t, ioutil.WriteFile(clientKeyPath, []byte("dummy key data"), 0600))
-	assert.NoError(t, ioutil.WriteFile(caCertPath, []byte("dummy ca data"), 0600))
+	dummyClientCertContent := `-----BEGIN CERTIFICATE-----
+dGVzdGNsaWVudGNlcnQ=
+-----END CERTIFICATE-----`
+	dummyClientKeyContent := `-----BEGIN PRIVATE KEY-----
+dGVzdGNsaWVudGtleQ==
+-----END PRIVATE KEY-----`
+	dummyCaCertContent := `-----BEGIN CERTIFICATE-----
+dGVzdGNhY2VydA==
+-----END CERTIFICATE-----`
+
+	assert.NoError(t, os.WriteFile(clientCertPath, []byte(dummyClientCertContent), 0600))
+	assert.NoError(t, os.WriteFile(clientKeyPath, []byte(dummyClientKeyContent), 0600))
+	assert.NoError(t, os.WriteFile(caCertPath, []byte(dummyCaCertContent), 0600))
 
 	ctx := context.Background()
 
 	t.Run("Successful mTLS config", func(t *testing.T) {
-		dialOpts = nil // Reset
+		// dialOpts = nil // This was the unused variable assignment
 		err := GrpcSimpleStoreWithMTLS(ctx, "localhost:50051", "password", "key", "value", clientCertPath, clientKeyPath, caCertPath)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "mock dial: connection refused")

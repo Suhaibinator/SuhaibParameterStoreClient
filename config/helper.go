@@ -65,8 +65,8 @@ func simpleRetrieveParameterWithTimeout(paramStoreHost string, paramStorePort in
 
 	// Check if mTLS certificate paths are provided.
 	if clientCertFile != "" && clientKeyFile != "" && caCertFile != "" {
-		// Call the mTLS gRPC client function directly.
-		value, err = client.GrpcSimpleRetrieveWithMTLS(ctx, serverAddress, parameterStoreSecret, parameterStoreKey, clientCertFile, clientKeyFile, caCertFile)
+		// Call the mTLS gRPC client function via the function variable for testability.
+		value, err = grpcSimpleRetrieveWithMTLSFunc(ctx, serverAddress, parameterStoreSecret, parameterStoreKey, clientCertFile, clientKeyFile, caCertFile)
 	} else {
 		// Call the non-mTLS gRPC client function via the function variable for testability.
 		value, err = grpcSimpleRetrieveFunc(ctx, serverAddress, parameterStoreSecret, parameterStoreKey)
