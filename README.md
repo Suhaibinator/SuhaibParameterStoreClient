@@ -7,7 +7,7 @@ A Go client library for interacting with a parameter store service via gRPC. It 
 ## Features
 
 *   **gRPC Client:** Functions (`GrpcSimpleStore`, `GrpcimpleRetrieve`) to interact with a gRPC-based parameter store service.
-*   **Configuration Helper:** A `ParameterStoreConfig` struct and `Init` method to easily retrieve configuration values, checking the parameter store first and falling back to environment variables.
+*   **Configuration Helper:** A `ParameterStoreClient` for connection details and a `ParameterStoreConfig` struct with an `Init` method to retrieve configuration values, checking the parameter store first and falling back to environment variables.
 *   **Context Handling:** gRPC client functions utilize `context.Context` for timeouts and cancellation.
 *   **Testable:** Includes mocks and tests for both the gRPC client and the configuration helper.
 
@@ -80,9 +80,15 @@ func main() {
 	os.Setenv("MY_APP_API_KEY_ENV", "env-api-key-123")
 	defer os.Unsetenv("MY_APP_API_KEY_ENV") // Clean up env var
 
-	paramStoreHost := "localhost" // Replace with your parameter store host
-	paramStorePort := 50051       // Replace with your parameter store port
-	paramStoreTimeout := 3 * time.Second
+        paramStoreHost := "localhost" // Replace with your parameter store host
+        paramStorePort := 50051       // Replace with your parameter store port
+        paramStoreTimeout := 3 * time.Second
+
+        client := &config.ParameterStoreClient{
+                Host:    paramStoreHost,
+                Port:    paramStorePort,
+                Timeout: paramStoreTimeout,
+        }
 
 	// Define the configuration structure
 	appConfig := struct {
@@ -97,10 +103,10 @@ func main() {
 		},
 	}
 
-	// Initialize the APIKey field
-	// This will try the parameter store first, then the environment variable.
-	// It will panic if neither provides a value.
-	appConfig.APIKey.Init(paramStoreHost, paramStorePort, paramStoreTimeout)
+        // Initialize the APIKey field using the client
+        // This will try the parameter store first, then the environment variable.
+        // It will panic if neither provides a value.
+        appConfig.APIKey.Init(client)
 
 	fmt.Printf("Initialized API Key: %s\n", appConfig.APIKey.ParameterStoreValue)
 
@@ -170,21 +176,20 @@ if err != nil {
 // value, err := apiClient.Retrieve("some-key")
 ```
 
-### Configuration Helper (`ParameterStoreConfig`) with mTLS
+### Configuration Helper with mTLS
 
-The `ParameterStoreConfig` struct in the `config` package now includes fields to specify mTLS certificates. If these fields are populated with valid paths, the `Init` method will automatically attempt to use gRPC with mTLS when retrieving parameters from the parameter store.
-
-**New fields in `config.ParameterStoreConfig`:**
-
-*   `ClientCertFile (string)`: Path to the client's PEM-encoded certificate file.
-*   `ClientKeyFile (string)`: Path to the client's PEM-encoded private key file.
-*   `CACertFile (string)`: Path to the PEM-encoded CA certificate file for verifying the server.
-
-These fields include `omitempty` in their JSON, YAML, and TOML tags, meaning they are optional. If they are not provided, the client will attempt a non-mTLS gRPC connection as before.
-
-**Example Snippet:**
+To use mTLS, populate the certificate paths on `ParameterStoreClient`. When these fields are set, `Init` will connect to the parameter store using mTLS.
 
 ```go
+client := &config.ParameterStoreClient{
+    Host:          paramStoreHost,
+    Port:          paramStorePort,
+    Timeout:       paramStoreTimeout,
+    ClientCertFile: "/path/to/client.crt",
+    ClientKeyFile:  "/path/to/client.key",
+    CACertFile:     "/path/to/ca.crt",
+}
+
 appConfig := struct {
     SecureSetting config.ParameterStoreConfig
 }{
@@ -192,14 +197,11 @@ appConfig := struct {
         ParameterStoreKey:     "my-app/secure-setting",
         ParameterStoreSecret:  "your-secret-password",
         EnvironmentVariableKey: "MY_APP_SECURE_SETTING_ENV",
-        ClientCertFile:        "/path/to/client.crt", // Provide path to client cert
-        ClientKeyFile:         "/path/to/client.key", // Provide path to client key
-        CACertFile:            "/path/to/ca.crt",     // Provide path to CA cert
     },
 }
 
-// Init will use gRPC with mTLS if the cert paths are valid and non-empty
-appConfig.SecureSetting.Init(paramStoreHost, paramStorePort, paramStoreTimeout)
+// Init will use gRPC with mTLS because the client has certificate paths
+appConfig.SecureSetting.Init(client)
 
 fmt.Printf("Initialized Secure Setting: %s\n", appConfig.SecureSetting.ParameterStoreValue)
 ```
