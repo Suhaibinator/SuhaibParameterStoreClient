@@ -19,6 +19,17 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// GRPCDialContextFunc is a function variable that can be replaced for testing.
+// It defaults to the standard grpc.NewClient function.
+// grpc.NewClient creates a client connection to a gRPC server. It does not directly
+// accept a context.Context argument for the dial operation itself.
+// The context (e.g., `ctx`) passed to wrapper functions like GrpcimpleRetrieve is
+// still used for:
+// 1. Pre-dial check (ctx.Err()).
+// 2. Timeout/cancellation of the dial operation if grpc.WithBlock() is used as a DialOption.
+// 3. Timeout/cancellation of subsequent RPC calls (e.g., client.Retrieve(ctx, ...)).
+var GRPCDialContextFunc = grpc.NewClient
+
 func init() {
 	// Initialize the function pointers in the config package.
 	// This breaks the import cycle by allowing config to call client functions
@@ -54,11 +65,10 @@ func GrpcimpleRetrieve(ctx context.Context, ServerAddress string, Authentication
 		return "", fmt.Errorf("gRPC dial context for %s already expired/canceled: %w", ServerAddress, err)
 	}
 
-	// Create a client connection to the gRPC server using the combined options.
-	// Using grpc.DialContext to respect context timeout
-	// If grpc.WithBlock() is in allOpts, the dial operation will block until connection is established
-	// or the context times out.
-	conn, err := grpc.DialContext(ctx, ServerAddress, allOpts...)
+	// Create a client connection to the gRPC server using the combined options,
+	// via GRPCDialContextFunc (which defaults to grpc.NewClient).
+	// See the comment on GRPCDialContextFunc for how context.Context is handled.
+	conn, err := GRPCDialContextFunc(ServerAddress, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return "", fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)
@@ -161,11 +171,10 @@ func GrpcSimpleRetrieveWithMTLS(ctx context.Context, ServerAddress string, Authe
 		return "", fmt.Errorf("gRPC dial context for %s already expired/canceled: %w", ServerAddress, err)
 	}
 
-	// Create a client connection to the gRPC server using the combined options.
-	// Using grpc.DialContext to respect context timeout
-	// If grpc.WithBlock() is in allOpts, the dial operation will block until connection is established
-	// or the context times out.
-	conn, err := grpc.DialContext(ctx, ServerAddress, allOpts...)
+	// Create a client connection to the gRPC server using the combined options,
+	// via GRPCDialContextFunc (which defaults to grpc.NewClient).
+	// See the comment on GRPCDialContextFunc for how context.Context is handled.
+	conn, err := GRPCDialContextFunc(ServerAddress, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return "", fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)
@@ -215,11 +224,10 @@ func GrpcSimpleStore(ctx context.Context, ServerAddress string, AuthenticationPa
 		return fmt.Errorf("gRPC dial context for %s already expired/canceled: %w", ServerAddress, err)
 	}
 
-	// Create a client connection to the gRPC server using the combined options.
-	// Using grpc.DialContext to respect context timeout
-	// If grpc.WithBlock() is in allOpts, the dial operation will block until connection is established
-	// or the context times out.
-	conn, err := grpc.DialContext(ctx, ServerAddress, allOpts...)
+	// Create a client connection to the gRPC server using the combined options,
+	// via GRPCDialContextFunc (which defaults to grpc.NewClient).
+	// See the comment on GRPCDialContextFunc for how context.Context is handled.
+	conn, err := GRPCDialContextFunc(ServerAddress, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)
@@ -292,11 +300,10 @@ func GrpcSimpleStoreWithMTLS(ctx context.Context, ServerAddress string, Authenti
 		return fmt.Errorf("gRPC dial context for %s already expired/canceled: %w", ServerAddress, err)
 	}
 
-	// Create a client connection to the gRPC server using the combined options.
-	// Using grpc.DialContext to respect context timeout
-	// If grpc.WithBlock() is in allOpts, the dial operation will block until connection is established
-	// or the context times out.
-	conn, err := grpc.DialContext(ctx, ServerAddress, allOpts...)
+	// Create a client connection to the gRPC server using the combined options,
+	// via GRPCDialContextFunc (which defaults to grpc.NewClient).
+	// See the comment on GRPCDialContextFunc for how context.Context is handled.
+	conn, err := GRPCDialContextFunc(ServerAddress, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)

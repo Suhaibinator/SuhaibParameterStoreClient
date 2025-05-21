@@ -37,12 +37,8 @@ import (
 
 const bufSize = 1024 * 1024
 
-var (
-	// Keep track of the original grpcDialContext for restoration
-	originalGrpcDialContext = grpc.DialContext
-	// Initialize grpcDialContext with grpc.DialContext
-	grpcDialContext = grpc.DialContext
-)
+// No need for local grpcDialContext variable anymore
+// We'll use the exported GRPCDialContextFunc from the client package
 
 var lis *bufconn.Listener
 
@@ -138,8 +134,8 @@ func startMockServer(mockSrv *mockParameterStoreServer) func() {
 	}
 }
 
-func bufDialer(context.Context, string) (net.Conn, error) {
-	return lis.Dial()
+func bufDialer(ctx context.Context, _ string) (net.Conn, error) { // address string is not used by lis.DialContext
+	return lis.DialContext(ctx)
 }
 
 // --- Tests ---
@@ -365,24 +361,18 @@ func TestGrpcSimpleStore(t *testing.T) {
 }
 
 func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
-	// Mock grpc.DialContext to inspect options
-	// We're not actually dialing, just checking if mTLS creds would be used.
-	// This mock approach is simplified. A more robust test might involve
-	// a mock credentials.NewTLS or deeper inspection of DialOptions.
-	var dialOpts []grpc.DialOption
-
 	// Create a mock function that will be used in the test
-	mockDialFunc := func(ctx context.Context, target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-		dialOpts = opts
+	// Signature matches the new GRPCDialContextFunc: func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
+	mockDialFunc := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		// Return a specific gRPC error to stop further processing in the tested function.
 		return nil, status.Error(codes.Unavailable, "mock dial: connection refused")
 	}
 
 	// Save the original function to restore later
-	originalDialContext := grpcDialContext
+	originalDialFunc := GRPCDialContextFunc
 	// Replace with our mock function
-	grpcDialContext = mockDialFunc
-	defer func() { grpcDialContext = originalDialContext }() // Restore
+	GRPCDialContextFunc = mockDialFunc
+	defer func() { GRPCDialContextFunc = originalDialFunc }() // Restore
 
 	clientCertPath, clientKeyPath, caCertPath, cleanup := createDummyCertFiles(t)
 	defer cleanup()
@@ -390,8 +380,6 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Successful mTLS config", func(t *testing.T) {
-		dialOpts = nil // Reset for this test case
-
 		// Create a client config with valid cert files
 		clientConfig := &psconfig.ParameterStoreClient{
 			Host: "localhost",
@@ -411,30 +399,11 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 		// We expect an error because the mockDialContext returns an error.
 		// The important part is that we got past cert loading.
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "connection refused")
+		assert.Contains(t, err.Error(), "mock dial: connection refused")
 
-		// Check if transport credentials were set in dialOpts
-		foundCreds := false
-		for range dialOpts {
-			// This is an indirect way to check if WithTransportCredentials was called.
-			// A more direct approach would involve a custom grpc.DialOption implementation
-			// for testing or deeper mocking of the grpc package, which is complex.
-			// For now, we rely on the fact that successful cert loading leads to this option.
-			// If the type was exported, we could do: if _, ok := opt.(grpc.credentialsOption); ok {
-			// Or inspect the grpc.ClientConn.opts.copts.Creds field if we had a real conn.
-			// Since we can't easily inspect the option directly without more complex setup,
-			// we infer it by checking that cert loading didn't fail.
-			// A more robust check would involve a mock for credentials.NewTLS.
-			// For the scope of this test, successful progression to DialContext implies creds were prepared.
-			// Let's assume for now that if no cert error occurred, credentials were set.
-			// A more advanced test would spy on credentials.NewTLS or use a test gRPC server with mTLS.
-		}
-		// As a proxy, if we reached DialContext without cert errors, we assume creds were configured.
-		// This is a limitation of not being able to easily inspect DialOptions without more setup.
-		if err != nil && (errors.Is(err, context.DeadlineExceeded) || grpc.Code(err) == codes.Unavailable || grpc.Code(err) == codes.DeadlineExceeded || err.Error() == "mock dial: connection refused") {
-			foundCreds = true // If it's a dial error, creds were likely set
-		}
-		assert.True(t, foundCreds, "Expected transport credentials to be configured for mTLS")
+		// Since we're using a mock dial function that returns a specific error,
+		// if we get that error it means the credentials were properly configured
+		// and we reached the dial step without any certificate loading errors
 
 	})
 
@@ -524,15 +493,16 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 
 func TestGrpcSimpleStoreWithMTLS(t *testing.T) {
 	// Create a mock function that will be used in the test
-	mockDialFunc := func(ctx context.Context, target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	// Signature matches the new GRPCDialContextFunc: func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
+	mockDialFunc := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		return nil, status.Error(codes.Unavailable, "mock dial: connection refused")
 	}
 
 	// Save the original function to restore later
-	originalDialContext := grpcDialContext
+	originalDialFunc := GRPCDialContextFunc
 	// Replace with our mock function
-	grpcDialContext = mockDialFunc
-	defer func() { grpcDialContext = originalDialContext }() // Restore
+	GRPCDialContextFunc = mockDialFunc
+	defer func() { GRPCDialContextFunc = originalDialFunc }() // Restore
 
 	clientCertPath, clientKeyPath, caCertPath, cleanup := createDummyCertFiles(t)
 	defer cleanup()
@@ -540,11 +510,10 @@ func TestGrpcSimpleStoreWithMTLS(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Successful mTLS config", func(t *testing.T) {
-		// dialOpts = nil // This was the unused variable assignment
 		err := GrpcSimpleStoreWithMTLS(ctx, "localhost:50051", "password", "key", "value", clientCertPath, clientKeyPath, caCertPath)
 		assert.Error(t, err)
 		// The error message will be about connection refused, but not necessarily the exact mock message
-		assert.Contains(t, err.Error(), "connection refused")
+		assert.Contains(t, err.Error(), "mock dial: connection refused")
 
 		foundCreds := false
 		if err != nil && (errors.Is(err, context.DeadlineExceeded) || grpc.Code(err) == codes.Unavailable || grpc.Code(err) == codes.DeadlineExceeded || strings.Contains(err.Error(), "connection refused")) {
