@@ -76,6 +76,7 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 		expectedValue        string
 		expectPanic          bool
 		expectedPanicMessage string
+		client               ParameterStoreClient
 	}{
 		{
 			name: "Value already present",
@@ -84,6 +85,7 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
+			client:            ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
 			prePopulatedValue: "pre-filled-value",
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				t.Errorf("grpcSimpleRetrieveFunc should not be called when value is pre-filled")
@@ -107,6 +109,7 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
+			client:        ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
 			useEmptyValue: true,
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				t.Errorf("grpcSimpleRetrieveFunc should not be called when UseEmptyValue is true and value is initially empty")
@@ -130,6 +133,7 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
+			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				assert.Equal(t, testKey, key)
 				assert.Equal(t, testSecret, AuthenticationPassword)
@@ -153,10 +157,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreKey:      testKey,
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
-				ClientCertFile:         dummyClientCert,
-				ClientKeyFile:          dummyClientKey,
-				CACertFile:             dummyCACert,
 			},
+			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout, ClientCertFile: dummyClientCert, ClientKeyFile: dummyClientKey, CACertFile: dummyCACert},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				t.Errorf("grpcSimpleRetrieveFunc should not be called when mTLS certs are provided")
 				return "", errors.New("non-mTLS func called unexpectedly")
@@ -184,6 +186,7 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
+			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				select {
 				case <-ctx.Done():
@@ -210,10 +213,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreKey:      testKey,
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
-				ClientCertFile:         dummyClientCert,
-				ClientKeyFile:          dummyClientKey,
-				CACertFile:             dummyCACert,
 			},
+			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout, ClientCertFile: dummyClientCert, ClientKeyFile: dummyClientKey, CACertFile: dummyCACert},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				t.Errorf("grpcSimpleRetrieveFunc should not be called")
 				return "", errors.New("non-mTLS func called unexpectedly")
@@ -242,6 +243,7 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
+			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				return "", errors.New("some-grpc-error")
 			},
@@ -262,10 +264,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreKey:      testKey,
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
-				ClientCertFile:         dummyClientCert,
-				ClientKeyFile:          dummyClientKey,
-				CACertFile:             dummyCACert,
 			},
+			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout, ClientCertFile: dummyClientCert, ClientKeyFile: dummyClientKey, CACertFile: dummyCACert},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				t.Errorf("grpcSimpleRetrieveFunc should not be called")
 				return "", errors.New("non-mTLS func called unexpectedly")
@@ -288,6 +288,7 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
+			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				return "", nil // Success, but empty value
 			},
@@ -308,10 +309,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreKey:      testKey,
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
-				ClientCertFile:         dummyClientCert,
-				ClientKeyFile:          dummyClientKey,
-				CACertFile:             dummyCACert,
 			},
+			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout, ClientCertFile: dummyClientCert, ClientKeyFile: dummyClientKey, CACertFile: dummyCACert},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				t.Errorf("grpcSimpleRetrieveFunc should not be called")
 				return "", errors.New("non-mTLS func called unexpectedly")
@@ -334,6 +333,7 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
+			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				return "", errors.New("param-store-failed")
 			},
@@ -354,10 +354,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreKey:      testKey,
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
-				ClientCertFile:         dummyClientCert,
-				ClientKeyFile:          dummyClientKey,
-				CACertFile:             dummyCACert,
 			},
+			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout, ClientCertFile: dummyClientCert, ClientKeyFile: dummyClientKey, CACertFile: dummyCACert},
 			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
 				t.Errorf("grpcSimpleRetrieveFunc should not be called")
 				return "", errors.New("non-mTLS func called unexpectedly")
@@ -392,11 +390,11 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 
 			if tt.expectPanic {
 				assert.PanicsWithError(t, tt.expectedPanicMessage, func() {
-					config.Init(testHost, testPort, testTimeout)
+					config.Init(&tt.client)
 				}, "Expected Init to panic with specific error")
 			} else {
 				assert.NotPanics(t, func() {
-					config.Init(testHost, testPort, testTimeout)
+					config.Init(&tt.client)
 				}, "Expected Init not to panic")
 				assert.Equal(t, tt.expectedValue, config.ParameterStoreValue, "ParameterStoreValue mismatch")
 			}

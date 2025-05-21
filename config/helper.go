@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
 	"github.com/Suhaibinator/SuhaibParameterStoreClient/client"
 	"google.golang.org/grpc"
@@ -49,47 +48,12 @@ type ParameterStoreConfig struct {
 	CACertFile string `json:"ca_cert_file,omitempty" yaml:"ca_cert_file,omitempty" toml:"ca_cert_file,omitempty"`
 }
 
-// simpleRetrieveParameterWithTimeout retrieves a parameter from the parameter store via gRPC with a specified timeout
-// using context cancellation. It takes the host, port, timeout duration, secret, key, and mTLS certificate paths as arguments.
-func simpleRetrieveParameterWithTimeout(paramStoreHost string, paramStorePort int, parameterStoreTimeout time.Duration, parameterStoreSecret, parameterStoreKey, clientCertFile, clientKeyFile, caCertFile string) (string, error) {
-	// Create a context with the specified timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), parameterStoreTimeout)
-	// Ensure the context is cancelled to release resources, even if the call returns early.
-	defer cancel()
-
-	// Construct the server address.
-	serverAddress := fmt.Sprintf("%s:%v", paramStoreHost, paramStorePort)
-
-	var value string
-	var err error
-
-	// Check if mTLS certificate paths are provided.
-	if clientCertFile != "" && clientKeyFile != "" && caCertFile != "" {
-		// Call the mTLS gRPC client function via the function variable for testability.
-		value, err = grpcSimpleRetrieveWithMTLSFunc(ctx, serverAddress, parameterStoreSecret, parameterStoreKey, clientCertFile, clientKeyFile, caCertFile)
-	} else {
-		// Call the non-mTLS gRPC client function via the function variable for testability.
-		value, err = grpcSimpleRetrieveFunc(ctx, serverAddress, parameterStoreSecret, parameterStoreKey)
-	}
-
-	// Check if the error is due to context deadline exceeded (timeout).
-	if err != nil && ctx.Err() == context.DeadlineExceeded {
-		// Optionally, return the custom timeoutError or just the context error.
-		// Returning the context error might be more idiomatic Go.
-		// return "", timeoutError{}
-		return "", fmt.Errorf("parameter store operation timed out: %w", err)
-	}
-
-	// Return the retrieved value and any other error.
-	return value, err
-}
-
 // setValueIfEmpty attempts to set a value based on a priority order:
 // 1. Use the provided 'value' if it's not empty.
 // 2. Retrieve from the parameter store using the provided key and secret (and mTLS certs if available).
 // 3. Retrieve from the environment variable using the provided environment variable key.
 // If all methods fail, it returns an error.
-func setValueIfEmpty(paramStoreHost string, paramStorePort int, parameterStoreTimeout time.Duration, value, parameterStoreKey, parameterStoreSecret, envVarKey, clientCertFile, clientKeyFile, caCertFile string) (string, error) {
+func setValueIfEmpty(client *ParameterStoreClient, value, parameterStoreKey, parameterStoreSecret, envVarKey string) (string, error) {
 	// If a value is already provided, return it immediately.
 	if value != "" {
 		return value, nil
@@ -97,7 +61,9 @@ func setValueIfEmpty(paramStoreHost string, paramStorePort int, parameterStoreTi
 
 	var err error
 	// Attempt to retrieve the value from the parameter store.
-	value, err = simpleRetrieveParameterWithTimeout(paramStoreHost, paramStorePort, parameterStoreTimeout, parameterStoreSecret, parameterStoreKey, clientCertFile, clientKeyFile, caCertFile)
+	if client != nil {
+		value, err = client.retrieve(parameterStoreKey, parameterStoreSecret)
+	}
 	if err == nil && value != "" {
 		// If retrieval was successful and value is not empty, return it.
 		log.Printf("Retrieved value for key '%s' from parameter store.", parameterStoreKey)
@@ -128,10 +94,10 @@ func setValueIfEmpty(paramStoreHost string, paramStorePort int, parameterStoreTi
 }
 
 // Init initializes the ParameterStoreValue field of the ParameterStoreConfig struct.
-// It uses the setValueIfEmpty logic, requiring the parameter store host, port, and timeout.
+// It uses the provided ParameterStoreClient for retrieval from the parameter store.
 // If ParameterStoreValue is already set, this function does nothing.
 // It panics if it fails to retrieve the value from all sources.
-func (c *ParameterStoreConfig) Init(paramStoreHost string, paramStorePort int, parameterStoreTimeout time.Duration) {
+func (c *ParameterStoreConfig) Init(client *ParameterStoreClient) {
 	// Only proceed if the value isn't already set
 	if c.ParameterStoreValue != "" {
 		return
@@ -145,16 +111,11 @@ func (c *ParameterStoreConfig) Init(paramStoreHost string, paramStorePort int, p
 	// Use setValueIfEmpty to populate ParameterStoreValue based on the defined priority.
 	// Pass the necessary connection details and the struct's fields.
 	retrievedValue, err := setValueIfEmpty(
-		paramStoreHost,
-		paramStorePort,
-		parameterStoreTimeout,
+		client,
 		c.ParameterStoreValue, // Pass the current value (should be empty here)
 		c.ParameterStoreKey,
 		c.ParameterStoreSecret,
 		c.EnvironmentVariableKey,
-		c.ClientCertFile,
-		c.ClientKeyFile,
-		c.CACertFile,
 	)
 
 	// If an error occurred (value not found anywhere), panic.
