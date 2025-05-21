@@ -74,8 +74,6 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 	// Define common test parameters
 	testHost := "localhost"
 	testPort := 1234
-	testHost := "localhost"
-	testPort := 1234
 	testTimeout := 100 * time.Millisecond
 	testKey := "test-key"
 	// testSecret is now part of ParameterStoreClient
