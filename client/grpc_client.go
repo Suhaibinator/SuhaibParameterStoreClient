@@ -98,7 +98,10 @@ func GrpcSimpleRetrieveWithMTLS(ctx context.Context, ServerAddress string, Authe
 		return "", fmt.Errorf("failed to load CA cert: %w", err)
 	}
 	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
+	if ok := caCertPool.AppendCertsFromPEM(caCert); !ok {
+		log.Printf("Failed to append CA certs to the pool: no valid certificates found")
+		return "", fmt.Errorf("failed to append CA certs to the pool: no valid certificates found")
+	}
 
 	creds := credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{clientCert},
