@@ -3,9 +3,12 @@ package client
 import (
 	"bytes"
 	"encoding/json"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 )
@@ -13,13 +16,52 @@ import (
 type APIClient struct {
 	BaseURL                string
 	AuthenticationPassword string
+	httpClient             *http.Client
 }
 
 func NewAPIClient(baseURL, authenticationPassword string) *APIClient {
 	return &APIClient{
 		BaseURL:                baseURL,
 		AuthenticationPassword: authenticationPassword,
+		httpClient:             http.DefaultClient,
 	}
+}
+
+func NewAPIClientWithMTLS(baseURL, authenticationPassword, clientCertFile, clientKeyFile, caCertFile string) (*APIClient, error) {
+	// Load client cert
+	clientCert, err := tls.LoadX509KeyPair(clientCertFile, clientKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load client cert: %w", err)
+	}
+
+	// Load CA cert
+	caCertPEM, err := ioutil.ReadFile(caCertFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CA cert: %w", err)
+	}
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCertPEM) {
+		return nil, fmt.Errorf("failed to append CA cert to pool")
+	}
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{clientCert},
+		RootCAs:      caCertPool,
+	}
+
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+
+	httpClient := &http.Client{
+		Transport: transport,
+	}
+
+	return &APIClient{
+		BaseURL:                baseURL,
+		AuthenticationPassword: authenticationPassword,
+		httpClient:             httpClient,
+	}, nil
 }
 
 func (client *APIClient) Store(key, value string) error {
@@ -38,7 +80,7 @@ func (client *APIClient) Store(key, value string) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", client.AuthenticationPassword)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -57,7 +99,7 @@ func (client *APIClient) Retrieve(key string) (string, error) {
 		return "", err
 	}
 	req.Header.Set("Authorization", client.AuthenticationPassword)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
