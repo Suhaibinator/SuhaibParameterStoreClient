@@ -41,12 +41,12 @@ type ParameterStoreConfig struct {
 	ParameterStoreValue string `json:"parameter_store_value" yaml:"parameter_store_value" toml:"parameter_store_value"`
 	// ParameterStoreUseEmptyValue indicates whether to use an empty value if value is an empty string.
 	ParameterStoreUseEmptyValue bool `json:"parameter_store_use_empty_value" yaml:"parameter_store_use_empty_value" toml:"parameter_store_use_empty_value"`
-// ClientCertFile is the path to the client certificate file for mTLS.
-ClientCertFile string `json:"client_cert_file,omitempty" yaml:"client_cert_file,omitempty" toml:"client_cert_file,omitempty"`
-// ClientKeyFile is the path to the client key file for mTLS.
-ClientKeyFile string `json:"client_key_file,omitempty" yaml:"client_key_file,omitempty" toml:"client_key_file,omitempty"`
-// CACertFile is the path to the CA certificate file for mTLS.
-CACertFile string `json:"ca_cert_file,omitempty" yaml:"ca_cert_file,omitempty" toml:"ca_cert_file,omitempty"`
+	// ClientCertFile is the path to the client certificate file for mTLS.
+	ClientCertFile string `json:"client_cert_file,omitempty" yaml:"client_cert_file,omitempty" toml:"client_cert_file,omitempty"`
+	// ClientKeyFile is the path to the client key file for mTLS.
+	ClientKeyFile string `json:"client_key_file,omitempty" yaml:"client_key_file,omitempty" toml:"client_key_file,omitempty"`
+	// CACertFile is the path to the CA certificate file for mTLS.
+	CACertFile string `json:"ca_cert_file,omitempty" yaml:"ca_cert_file,omitempty" toml:"ca_cert_file,omitempty"`
 }
 
 // simpleRetrieveParameterWithTimeout retrieves a parameter from the parameter store via gRPC with a specified timeout
@@ -69,7 +69,7 @@ func simpleRetrieveParameterWithTimeout(paramStoreHost string, paramStorePort in
 		value, err = client.GrpcSimpleRetrieveWithMTLS(ctx, serverAddress, parameterStoreSecret, parameterStoreKey, clientCertFile, clientKeyFile, caCertFile)
 	} else {
 		// Call the non-mTLS gRPC client function via the function variable for testability.
-		value, err = grpcRetrieveFunc(ctx, serverAddress, parameterStoreSecret, parameterStoreKey)
+		value, err = grpcSimpleRetrieveFunc(ctx, serverAddress, parameterStoreSecret, parameterStoreKey)
 	}
 
 	// Check if the error is due to context deadline exceeded (timeout).

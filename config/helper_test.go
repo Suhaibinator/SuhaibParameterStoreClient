@@ -4,13 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/Suhaibinator/SuhaibParameterStoreClient/client" // Assuming client package is in this path
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 )
@@ -21,8 +18,8 @@ import (
 var (
 	originalGrpcSimpleRetrieveFunc         func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error)
 	originalGrpcSimpleRetrieveWithMTLSFunc func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientCertFile string, clientKeyFile string, caCertFile string, opts ...grpc.DialOption) (val string, err error)
-	originalOsGetenvFunc                     func(key string) string
-	mu                                       sync.Mutex // Mutex to protect access to global function variables
+	originalOsGetenvFunc                   func(key string) string
+	mu                                     sync.Mutex // Mutex to protect access to global function variables
 )
 
 func setupTest() {
@@ -69,16 +66,16 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 	dummyCACert := "ca.crt"
 
 	tests := []struct {
-		name                   string
-		initialConfig          ParameterStoreConfig
-		prePopulatedValue      string
-		useEmptyValue          bool
-		mockRetrieve           mockGrpcRetrieveFuncType
-		mockRetrieveMTLS       mockGrpcRetrieveWithMTLSFuncType
-		mockGetenv             mockGetenvFuncType
-		expectedValue          string
-		expectPanic            bool
-		expectedPanicMessage   string
+		name                 string
+		initialConfig        ParameterStoreConfig
+		prePopulatedValue    string
+		useEmptyValue        bool
+		mockRetrieve         mockGrpcRetrieveFuncType
+		mockRetrieveMTLS     mockGrpcRetrieveWithMTLSFuncType
+		mockGetenv           mockGetenvFuncType
+		expectedValue        string
+		expectPanic          bool
+		expectedPanicMessage string
 	}{
 		{
 			name: "Value already present",
@@ -392,7 +389,6 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				config.ParameterStoreValue = tt.prePopulatedValue
 			}
 			config.ParameterStoreUseEmptyValue = tt.useEmptyValue
-
 
 			if tt.expectPanic {
 				assert.PanicsWithError(t, tt.expectedPanicMessage, func() {

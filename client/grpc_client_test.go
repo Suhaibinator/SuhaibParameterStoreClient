@@ -19,8 +19,6 @@ import (
 	"io/ioutil"
 	"os"
 
-	"io/ioutil"
-	"os"
 	"path/filepath"
 
 	"google.golang.org/grpc/credentials"
@@ -36,28 +34,6 @@ var (
 
 // mockDialContext allows us to inspect the dial options passed to grpc.DialContext
 func mockDialContext(ctx context.Context, target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-	// For testing, we'll just check if transport credentials are set.
-	// We're not actually establishing a connection here in these specific tests.
-	var creds credentials.TransportCredentials
-	for _, opt := range opts {
-		// This is a simplified check. In a real scenario, you might need to inspect
-		// the type of credentials more specifically if you have different credential types.
-		// Here, we're assuming any TransportCredentials indicates mTLS setup.
-		// A more robust check would involve type assertion to credentials.TLSInfo or similar.
-		if co, ok := opt.(grpc.DialOption); ok {
-			// This is a bit of a hack as grpc.DialOption is an interface and
-			// we can't directly access its internal fields without knowing the concrete type.
-			// For this test, we'll assume that if a credentials.NewTLS(...) was used,
-			// it would result in a specific internal structure that we can't easily inspect here
-			// without deeper reflection or more complex mocking.
-			// So, we'll rely on the fact that if the cert loading passes, and we provide cert paths,
-			// then the WithTransportCredentials option should be used.
-			// A more direct way would be to mock the credentials.NewTLS function itself.
-			// However, for this specific task, we'll focus on the cert loading and error paths.
-		}
-	}
-	// Return a nil connection and a specific error to indicate DialContext was called.
-	// This helps differentiate from cert loading errors.
 	return nil, fmt.Errorf("mockDialContext: Dial attempted with target %s", target)
 }
 
@@ -430,7 +406,7 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 
 		// Check if transport credentials were set in dialOpts
 		foundCreds := false
-		for _, opt := range dialOpts {
+		for range dialOpts {
 			// This is an indirect way to check if WithTransportCredentials was called.
 			// A more direct approach would involve a custom grpc.DialOption implementation
 			// for testing or deeper mocking of the grpc package, which is complex.
@@ -541,116 +517,3 @@ func TestGrpcSimpleStoreWithMTLS(t *testing.T) {
 // It's not ideal but helps in testing the options passed to DialContext without
 // a full gRPC server setup for mTLS.
 var grpcDialContext = grpc.DialContext
-
-// --- mTLS Tests ---
-
-func createDummyCertFiles(t *testing.T) (clientCertFile, clientKeyFile, caCertFile string, cleanupFunc func()) {
-	t.Helper()
-
-	var err error
-	tmpDir, err := ioutil.TempDir("", "grpc-mtls-test-certs")
-	assert.NoError(t, err, "Failed to create temp dir for certs")
-
-	clientCertFile = tmpDir + "/client.crt"
-	clientKeyFile = tmpDir + "/client.key"
-	caCertFile = tmpDir + "/ca.crt"
-
-	// Create dummy content. These don't need to be valid certs for these tests,
-	// as we are primarily testing the file loading paths and early error handling.
-	// For tls.LoadX509KeyPair to not immediately fail parsing, it needs a PEM block.
-	dummyClientCertContent := []byte("-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----")
-	dummyClientKeyContent := []byte("-----BEGIN PRIVATE KEY-----\n-----END PRIVATE KEY-----")
-	dummyCACertContent := []byte("-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----")
-
-	err = ioutil.WriteFile(clientCertFile, dummyClientCertContent, 0600)
-	assert.NoError(t, err, "Failed to write dummy client cert")
-	err = ioutil.WriteFile(clientKeyFile, dummyClientKeyContent, 0600)
-	assert.NoError(t, err, "Failed to write dummy client key")
-	err = ioutil.WriteFile(caCertFile, dummyCACertContent, 0600)
-	assert.NoError(t, err, "Failed to write dummy CA cert")
-
-	cleanupFunc = func() {
-		os.RemoveAll(tmpDir)
-	}
-	return
-}
-
-func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
-	clientCert, clientKey, caCert, cleanup := createDummyCertFiles(t)
-	defer cleanup()
-
-	ctxShortTimeout, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond) // Very short timeout
-	defer cancel()
-
-	mockPassword := "mtlsPass"
-	mockKey := "mtlsKey"
-	serverAddr := "localhost:12345" // A non-existent server
-
-	t.Run("MTLS Success - Dial Attempted", func(t *testing.T) {
-		// We expect this to fail because the server doesn't exist, but AFTER attempting to load certs.
-		// The error should be about connection timeout or unavailable, not about cert loading.
-		_, err := GrpcSimpleRetrieveWithMTLS(ctxShortTimeout, serverAddr, mockPassword, mockKey, clientCert, clientKey, caCert, grpc.WithBlock())
-		assert.Error(t, err)
-		assert.NotContains(t, err.Error(), "failed to load client cert", "Error should not be client cert loading")
-		assert.NotContains(t, err.Error(), "failed to read CA cert", "Error should not be CA cert loading")
-		// Expecting context deadline exceeded or connection refused type of error
-		assert.True(t, errors.Is(err, context.DeadlineExceeded) || grpc.Code(err) == codes.Unavailable || grpc.Code(err) == codes.DeadlineExceeded, "Expected connection error or timeout, got: %v", err)
-	})
-
-	t.Run("MTLS Error - Client Cert Missing", func(t *testing.T) {
-		_, err := GrpcSimpleRetrieveWithMTLS(ctxShortTimeout, serverAddr, mockPassword, mockKey, "nonexistent.crt", clientKey, caCert)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load client cert")
-	})
-
-	t.Run("MTLS Error - Client Key Missing", func(t *testing.T) {
-		_, err := GrpcSimpleRetrieveWithMTLS(ctxShortTimeout, serverAddr, mockPassword, mockKey, clientCert, "nonexistent.key", caCert)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load client cert") // tls.LoadX509KeyPair handles both
-	})
-
-	t.Run("MTLS Error - CA Cert Missing", func(t *testing.T) {
-		_, err := GrpcSimpleRetrieveWithMTLS(ctxShortTimeout, serverAddr, mockPassword, mockKey, clientCert, clientKey, "nonexistent.ca")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to read CA cert")
-	})
-}
-
-func TestGrpcSimpleStoreWithMTLS(t *testing.T) {
-	clientCert, clientKey, caCert, cleanup := createDummyCertFiles(t)
-	defer cleanup()
-
-	ctxShortTimeout, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond) // Very short timeout
-	defer cancel()
-
-	mockPassword := "mtlsPassStore"
-	mockKey := "mtlsKeyStore"
-	mockValue := "mtlsValueStore"
-	serverAddr := "localhost:12346" // A non-existent server
-
-	t.Run("MTLS Success - Dial Attempted", func(t *testing.T) {
-		err := GrpcSimpleStoreWithMTLS(ctxShortTimeout, serverAddr, mockPassword, mockKey, mockValue, clientCert, clientKey, caCert, grpc.WithBlock())
-		assert.Error(t, err)
-		assert.NotContains(t, err.Error(), "failed to load client cert", "Error should not be client cert loading")
-		assert.NotContains(t, err.Error(), "failed to read CA cert", "Error should not be CA cert loading")
-		assert.True(t, errors.Is(err, context.DeadlineExceeded) || grpc.Code(err) == codes.Unavailable || grpc.Code(err) == codes.DeadlineExceeded, "Expected connection error or timeout, got: %v", err)
-	})
-
-	t.Run("MTLS Error - Client Cert Missing", func(t *testing.T) {
-		err := GrpcSimpleStoreWithMTLS(ctxShortTimeout, serverAddr, mockPassword, mockKey, mockValue, "nonexistent.crt", clientKey, caCert)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load client cert")
-	})
-
-	t.Run("MTLS Error - Client Key Missing", func(t *testing.T) {
-		err := GrpcSimpleStoreWithMTLS(ctxShortTimeout, serverAddr, mockPassword, mockKey, mockValue, clientCert, "nonexistent.key", caCert)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load client cert") // tls.LoadX509KeyPair handles both
-	})
-
-	t.Run("MTLS Error - CA Cert Missing", func(t *testing.T) {
-		err := GrpcSimpleStoreWithMTLS(ctxShortTimeout, serverAddr, mockPassword, mockKey, mockValue, clientCert, clientKey, "nonexistent.ca")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to read CA cert")
-	})
-}
