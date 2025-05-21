@@ -68,7 +68,8 @@ func GrpcimpleRetrieve(ctx context.Context, ServerAddress string, Authentication
 	// Create a client connection to the gRPC server using the combined options,
 	// via GRPCDialContextFunc (which defaults to grpc.NewClient).
 	// See the comment on GRPCDialContextFunc for how context.Context is handled.
-	conn, err := GRPCDialContextFunc(ServerAddress, allOpts...)
+	target := "passthrough:///" + ServerAddress
+	conn, err := GRPCDialContextFunc(target, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return "", fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)
@@ -174,7 +175,8 @@ func GrpcSimpleRetrieveWithMTLS(ctx context.Context, ServerAddress string, Authe
 	// Create a client connection to the gRPC server using the combined options,
 	// via GRPCDialContextFunc (which defaults to grpc.NewClient).
 	// See the comment on GRPCDialContextFunc for how context.Context is handled.
-	conn, err := GRPCDialContextFunc(ServerAddress, allOpts...)
+	target := "passthrough:///" + ServerAddress
+	conn, err := GRPCDialContextFunc(target, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return "", fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)
@@ -227,7 +229,8 @@ func GrpcSimpleStore(ctx context.Context, ServerAddress string, AuthenticationPa
 	// Create a client connection to the gRPC server using the combined options,
 	// via GRPCDialContextFunc (which defaults to grpc.NewClient).
 	// See the comment on GRPCDialContextFunc for how context.Context is handled.
-	conn, err := GRPCDialContextFunc(ServerAddress, allOpts...)
+	target := "passthrough:///" + ServerAddress
+	conn, err := GRPCDialContextFunc(target, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)
@@ -303,7 +306,8 @@ func GrpcSimpleStoreWithMTLS(ctx context.Context, ServerAddress string, Authenti
 	// Create a client connection to the gRPC server using the combined options,
 	// via GRPCDialContextFunc (which defaults to grpc.NewClient).
 	// See the comment on GRPCDialContextFunc for how context.Context is handled.
-	conn, err := GRPCDialContextFunc(ServerAddress, allOpts...)
+	target := "passthrough:///" + ServerAddress
+	conn, err := GRPCDialContextFunc(target, allOpts...)
 	if err != nil {
 		log.Printf("did not connect to %s: %v", ServerAddress, err)
 		return fmt.Errorf("failed to connect to gRPC server at %s: %w", ServerAddress, err)
