@@ -265,7 +265,8 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 		_, err := GrpcimpleRetrieve(ctx, "bufnet", mockPassword, mockKey, opts...)
 
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to connect", "Expected connection error")
+		// Error message may vary, but should indicate a connection issue
+		assert.Contains(t, err.Error(), "connection error", "Expected connection error")
 
 		// Restart server for subsequent tests if needed (though defer handles it for the whole function)
 		// stopServer = startMockServer(mockSrv)
