@@ -30,13 +30,41 @@ import (
 // 3. Timeout/cancellation of subsequent RPC calls (e.g., client.Retrieve(ctx, ...)).
 var GRPCDialContextFunc = grpc.NewClient
 
-func init() {
-	// Initialize the function pointers in the config package.
-	// This breaks the import cycle by allowing config to call client functions
-	// without config directly importing client for assignment.
-	psconfig.GrpcSimpleRetrieveFunc = GrpcimpleRetrieve // GrpcimpleRetrieve is the actual name in this file
-	psconfig.GrpcSimpleRetrieveWithMTLSFunc = GrpcSimpleRetrieveWithMTLS
+// RetrieveWithClient implements the actual retrieval logic for ParameterStoreClient.
+// This function should be assigned to config.RetrieveFunc before using ParameterStoreClient.
+func RetrieveWithClient(c *psconfig.ParameterStoreClient, key, secret string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
+	defer cancel()
+
+	serverAddress := fmt.Sprintf("%s:%v", c.Host, c.Port)
+
+	var (
+		value string
+		err   error
+	)
+
+	useMTLS := c.ClientCert.IsProvided() &&
+		c.ClientKey.IsProvided() &&
+		c.CACert.IsProvided()
+
+	if useMTLS {
+		value, err = GrpcSimpleRetrieveWithMTLS(ctx, serverAddress, secret, key, c)
+	} else {
+		value, err = GrpcimpleRetrieve(ctx, serverAddress, secret, key)
+	}
+
+	if err != nil && ctx.Err() == context.DeadlineExceeded {
+		return "", fmt.Errorf("parameter store operation timed out: %w", err)
+	}
+
+	return value, err
 }
+
+func init() {
+	// Automatically initialize the retrieve function in the config package
+	psconfig.RetrieveFunc = RetrieveWithClient
+}
+
 
 // Default timeout for gRPC operations if no context deadline is set.
 const defaultGrpcTimeout = 5 * time.Second

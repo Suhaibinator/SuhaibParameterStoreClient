@@ -9,24 +9,21 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/grpc"
 )
 
 // --- Mocks ---
 
 // Store original functions to restore them after tests
 var (
-	originalGrpcSimpleRetrieveFunc         func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error)
-	originalGrpcSimpleRetrieveWithMTLSFunc func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error)
-	originalOsGetenvFunc                   func(key string) string
-	mu                                     sync.Mutex // Mutex to protect access to global function variables
+	originalRetrieveFunc func(c *ParameterStoreClient, key, secret string) (string, error)
+	originalOsGetenvFunc func(key string) string
+	mu                   sync.Mutex // Mutex to protect access to global function variables
 )
 
 func setupTest() {
 	mu.Lock()
 	// Store the original functions assigned to our package variables
-	originalGrpcSimpleRetrieveFunc = GrpcSimpleRetrieveFunc
-	originalGrpcSimpleRetrieveWithMTLSFunc = GrpcSimpleRetrieveWithMTLSFunc
+	originalRetrieveFunc = RetrieveFunc
 	originalOsGetenvFunc = osGetenvFunc
 	mu.Unlock()
 }
@@ -34,15 +31,13 @@ func setupTest() {
 func teardownTest() {
 	mu.Lock()
 	// Restore the original functions
-	GrpcSimpleRetrieveFunc = originalGrpcSimpleRetrieveFunc
-	GrpcSimpleRetrieveWithMTLSFunc = originalGrpcSimpleRetrieveWithMTLSFunc
+	RetrieveFunc = originalRetrieveFunc
 	osGetenvFunc = originalOsGetenvFunc
 	mu.Unlock()
 }
 
 // Define types for our mock functions for clarity
-type mockGrpcRetrieveFuncType func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error)
-type mockGrpcRetrieveWithMTLSFuncType func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error)
+type mockRetrieveFuncType func(c *ParameterStoreClient, key, secret string) (string, error)
 type mockGetenvFuncType func(key string) string
 
 // --- Tests ---
@@ -70,8 +65,7 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 		initialConfig        ParameterStoreConfig
 		prePopulatedValue    string
 		useEmptyValue        bool
-		mockRetrieve         mockGrpcRetrieveFuncType
-		mockRetrieveMTLS     mockGrpcRetrieveWithMTLSFuncType
+		mockRetrieve         mockRetrieveFuncType
 		mockGetenv           mockGetenvFuncType
 		expectedValue        string
 		expectPanic          bool
@@ -87,12 +81,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 			},
 			client:            ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
 			prePopulatedValue: "pre-filled-value",
-			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
-				t.Errorf("grpcSimpleRetrieveFunc should not be called when value is pre-filled")
-				return "", errors.New("should not be called")
-			},
-			mockRetrieveMTLS: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error) {
-				t.Errorf("GrpcSimpleRetrieveWithMTLSFunc should not be called when value is pre-filled")
+			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
+				t.Errorf("RetrieveFunc should not be called when value is pre-filled")
 				return "", errors.New("should not be called")
 			},
 			mockGetenv: func(key string) string {
@@ -111,12 +101,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 			},
 			client:        ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
 			useEmptyValue: true,
-			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
-				t.Errorf("grpcSimpleRetrieveFunc should not be called when UseEmptyValue is true and value is initially empty")
-				return "", errors.New("should not be called")
-			},
-			mockRetrieveMTLS: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error) {
-				t.Errorf("GrpcSimpleRetrieveWithMTLSFunc should not be called when UseEmptyValue is true and value is initially empty")
+			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
+				t.Errorf("RetrieveFunc should not be called when UseEmptyValue is true and value is initially empty")
 				return "", errors.New("should not be called")
 			},
 			mockGetenv: func(key string) string {
@@ -134,15 +120,13 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				EnvironmentVariableKey: testEnvKey,
 			},
 			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
-			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
+			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
 				assert.Equal(t, testKey, key)
-				assert.Equal(t, testSecret, AuthenticationPassword)
-				assert.Equal(t, fmt.Sprintf("%s:%d", testHost, testPort), ServerAddress)
+				assert.Equal(t, testSecret, secret)
+				assert.Equal(t, testHost, c.Host)
+				assert.Equal(t, testPort, c.Port)
+				assert.Equal(t, testTimeout, c.Timeout)
 				return testParamValue, nil
-			},
-			mockRetrieveMTLS: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error) {
-				t.Errorf("GrpcSimpleRetrieveWithMTLSFunc should not be called when mTLS certs are not provided")
-				return "", errors.New("mTLS func called unexpectedly")
 			},
 			mockGetenv: func(key string) string {
 				t.Errorf("osGetenvFunc should not be called")
@@ -172,17 +156,15 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 					FilePath: dummyCACert,
 				},
 			},
-			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
-				t.Errorf("GrpcSimpleRetrieveFunc should not be called when mTLS certs are provided")
-				return "", errors.New("non-mTLS func called unexpectedly")
-			},
-			mockRetrieveMTLS: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, keyParam string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error) {
-				assert.Equal(t, testKey, keyParam)
-				assert.Equal(t, testSecret, AuthenticationPassword)
-				assert.Equal(t, fmt.Sprintf("%s:%d", testHost, testPort), ServerAddress)
-				assert.Equal(t, dummyClientCert, clientConfig.ClientCert.FilePath)
-				assert.Equal(t, dummyClientKey, clientConfig.ClientKey.FilePath)
-				assert.Equal(t, dummyCACert, clientConfig.CACert.FilePath)
+			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
+				assert.Equal(t, testKey, key)
+				assert.Equal(t, testSecret, secret)
+				assert.Equal(t, testHost, c.Host)
+				assert.Equal(t, testPort, c.Port)
+				assert.Equal(t, testTimeout, c.Timeout)
+				assert.Equal(t, dummyClientCert, c.ClientCert.FilePath)
+				assert.Equal(t, dummyClientKey, c.ClientKey.FilePath)
+				assert.Equal(t, dummyCACert, c.CACert.FilePath)
 				return testMtlsParamValue, nil
 			},
 			mockGetenv: func(key string) string {
@@ -200,18 +182,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				EnvironmentVariableKey: testEnvKey,
 			},
 			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
-			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
-				select {
-				case <-ctx.Done():
-					return "", context.DeadlineExceeded
-				case <-time.After(testTimeout * 2):
-					t.Errorf("gRPC call should have timed out")
-					return "should-not-return", nil
-				}
-			},
-			mockRetrieveMTLS: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error) {
-				t.Errorf("GrpcSimpleRetrieveWithMTLSFunc should not be called")
-				return "", errors.New("mTLS func called unexpectedly")
+			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
+				return "", context.DeadlineExceeded
 			},
 			mockGetenv: func(key string) string {
 				assert.Equal(t, testEnvKey, key)
@@ -241,19 +213,9 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 					FilePath: dummyCACert,
 				},
 			},
-			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
-				t.Errorf("GrpcSimpleRetrieveFunc should not be called")
-				return "", errors.New("non-mTLS func called unexpectedly")
-			},
-			mockRetrieveMTLS: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error) {
-				assert.Equal(t, dummyClientCert, clientConfig.ClientCert.FilePath)
-				select {
-				case <-ctx.Done():
-					return "", context.DeadlineExceeded
-				case <-time.After(testTimeout * 2):
-					t.Errorf("gRPC mTLS call should have timed out")
-					return "should-not-return", nil
-				}
+			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
+				assert.Equal(t, dummyClientCert, c.ClientCert.FilePath)
+				return "", context.DeadlineExceeded
 			},
 			mockGetenv: func(key string) string {
 				assert.Equal(t, testEnvKey, key)
@@ -270,12 +232,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				EnvironmentVariableKey: testEnvKey,
 			},
 			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
-			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
+			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
 				return "", errors.New("some-grpc-error")
-			},
-			mockRetrieveMTLS: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error) {
-				t.Errorf("GrpcSimpleRetrieveWithMTLSFunc should not be called")
-				return "", errors.New("mTLS func called unexpectedly")
 			},
 			mockGetenv: func(key string) string {
 				assert.Equal(t, testEnvKey, key)
@@ -305,12 +263,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 					FilePath: dummyCACert,
 				},
 			},
-			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
-				t.Errorf("GrpcSimpleRetrieveFunc should not be called")
-				return "", errors.New("non-mTLS func called unexpectedly")
-			},
-			mockRetrieveMTLS: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error) {
-				assert.Equal(t, dummyClientCert, clientConfig.ClientCert.FilePath)
+			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
+				assert.Equal(t, dummyClientCert, c.ClientCert.FilePath)
 				return "", errors.New("some-grpc-mtls-error")
 			},
 			mockGetenv: func(key string) string {
@@ -328,12 +282,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				EnvironmentVariableKey: testEnvKey,
 			},
 			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
-			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
+			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
 				return "", nil // Success, but empty value
-			},
-			mockRetrieveMTLS: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error) {
-				t.Errorf("GrpcSimpleRetrieveWithMTLSFunc should not be called")
-				return "", errors.New("mTLS func called unexpectedly")
 			},
 			mockGetenv: func(key string) string {
 				assert.Equal(t, testEnvKey, key)
@@ -363,12 +313,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 					FilePath: dummyCACert,
 				},
 			},
-			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
-				t.Errorf("GrpcSimpleRetrieveFunc should not be called")
-				return "", errors.New("non-mTLS func called unexpectedly")
-			},
-			mockRetrieveMTLS: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error) {
-				assert.Equal(t, dummyClientCert, clientConfig.ClientCert.FilePath)
+			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
+				assert.Equal(t, dummyClientCert, c.ClientCert.FilePath)
 				return "", nil // Success, but empty value
 			},
 			mockGetenv: func(key string) string {
@@ -386,12 +332,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				EnvironmentVariableKey: testEnvKey,
 			},
 			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
-			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
+			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
 				return "", errors.New("param-store-failed")
-			},
-			mockRetrieveMTLS: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error) {
-				t.Errorf("GrpcSimpleRetrieveWithMTLSFunc should not be called")
-				return "", errors.New("mTLS func called unexpectedly")
 			},
 			mockGetenv: func(key string) string {
 				assert.Equal(t, testEnvKey, key)
@@ -421,12 +363,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 					FilePath: dummyCACert,
 				},
 			},
-			mockRetrieve: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) {
-				t.Errorf("GrpcSimpleRetrieveFunc should not be called")
-				return "", errors.New("non-mTLS func called unexpectedly")
-			},
-			mockRetrieveMTLS: func(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *ParameterStoreClient, opts ...grpc.DialOption) (val string, err error) {
-				assert.Equal(t, dummyClientCert, clientConfig.ClientCert.FilePath)
+			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
+				assert.Equal(t, dummyClientCert, c.ClientCert.FilePath)
 				return "", errors.New("param-store-mtls-failed")
 			},
 			mockGetenv: func(key string) string {
@@ -442,8 +380,7 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set mocks for this test case by assigning to package variables
 			mu.Lock()
-			GrpcSimpleRetrieveFunc = tt.mockRetrieve
-			GrpcSimpleRetrieveWithMTLSFunc = tt.mockRetrieveMTLS
+			RetrieveFunc = tt.mockRetrieve
 			osGetenvFunc = tt.mockGetenv
 			mu.Unlock()
 

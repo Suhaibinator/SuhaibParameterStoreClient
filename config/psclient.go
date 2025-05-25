@@ -1,11 +1,14 @@
 package config
 
 import (
-	"context"
 	"fmt"
 	"os" // Added for os.ReadFile
 	"time"
 )
+
+// RetrieveFunc is the function that will be used to retrieve values from the parameter store.
+// It must be initialized by the application before using ParameterStoreClient.
+var RetrieveFunc func(c *ParameterStoreClient, key, secret string) (string, error)
 
 // CertificateSource holds either a file path to a certificate/key or its raw byte content.
 type CertificateSource struct {
@@ -92,34 +95,10 @@ func NewParameterStoreClient(
 // retrieve fetches a value for the given key using the provided secret.
 // It automatically uses mTLS if certificate sources are properly configured.
 func (c *ParameterStoreClient) retrieve(key, secret string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
-	defer cancel()
-
-	serverAddress := fmt.Sprintf("%s:%v", c.Host, c.Port)
-
-	var (
-		value string
-		err   error
-	)
-
-	useMTLS := c.ClientCert.IsProvided() &&
-		c.ClientKey.IsProvided() &&
-		c.CACert.IsProvided()
-
-	if useMTLS {
-		// Assuming GrpcSimpleRetrieveWithMTLSFunc is adapted to accept *ParameterStoreClient
-		// or to internally call GetData() on the CertificateSource fields.
-		// The plan was to change the signature to pass 'c'.
-		value, err = GrpcSimpleRetrieveWithMTLSFunc(ctx, serverAddress, secret, key, c)
-	} else {
-		value, err = GrpcSimpleRetrieveFunc(ctx, serverAddress, secret, key)
+	if RetrieveFunc == nil {
+		return "", fmt.Errorf("RetrieveFunc not initialized. Please call config.InitializeRetrieveFunc() after importing the client package")
 	}
-
-	if err != nil && ctx.Err() == context.DeadlineExceeded {
-		return "", fmt.Errorf("parameter store operation timed out: %w", err)
-	}
-
-	return value, err
+	return RetrieveFunc(c, key, secret)
 }
 
 // Placeholder for functions assumed to be defined elsewhere (e.g., client/grpc_client.go or config/helper.go)
