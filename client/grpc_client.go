@@ -23,7 +23,7 @@ import (
 // It defaults to the standard grpc.NewClient function.
 // grpc.NewClient creates a client connection to a gRPC server. It does not directly
 // accept a context.Context argument for the dial operation itself.
-// The context (e.g., `ctx`) passed to wrapper functions like GrpcimpleRetrieve is
+// The context (e.g., `ctx`) passed to wrapper functions like GrpcSimpleRetrieve is
 // still used for:
 // 1. Pre-dial check (ctx.Err()).
 // 2. Timeout/cancellation of the dial operation if grpc.WithBlock() is used as a DialOption.
@@ -31,7 +31,7 @@ import (
 var GRPCDialContextFunc = grpc.NewClient
 
 // RetrieveWithClient implements the actual retrieval logic for ParameterStoreClient.
-// This function should be assigned to config.RetrieveFunc before using ParameterStoreClient.
+// Applications may assign this to ParameterStoreClient.RetrieveFunc.
 func RetrieveWithClient(c *psconfig.ParameterStoreClient, key, secret string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
 	defer cancel()
@@ -50,7 +50,7 @@ func RetrieveWithClient(c *psconfig.ParameterStoreClient, key, secret string) (s
 	if useMTLS {
 		value, err = GrpcSimpleRetrieveWithMTLS(ctx, serverAddress, secret, key, c)
 	} else {
-		value, err = GrpcimpleRetrieve(ctx, serverAddress, secret, key)
+		value, err = GrpcSimpleRetrieve(ctx, serverAddress, secret, key)
 	}
 
 	if err != nil && ctx.Err() == context.DeadlineExceeded {
@@ -60,18 +60,14 @@ func RetrieveWithClient(c *psconfig.ParameterStoreClient, key, secret string) (s
 	return value, err
 }
 
-func init() {
-	// Automatically initialize the retrieve function in the config package
-	psconfig.RetrieveFunc = RetrieveWithClient
-}
-
-
+// Optionally, packages can set RetrieveWithClient as the RetrieveFunc on their
+// ParameterStoreClient instances during initialization.
 // Default timeout for gRPC operations if no context deadline is set.
 const defaultGrpcTimeout = 5 * time.Second
 
-// GrpcimpleRetrieve retrieves a value from the parameter store using gRPC.
+// GrpcSimpleRetrieve retrieves a value from the parameter store using gRPC.
 // It accepts a context for timeout/cancellation control and optional grpc.DialOptions.
-func GrpcimpleRetrieve(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) { //nolint:all // Existing function
+func GrpcSimpleRetrieve(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (val string, err error) { //nolint:all // Existing function
 	// Ensure context has a deadline.
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
@@ -125,6 +121,11 @@ func GrpcimpleRetrieve(ctx context.Context, ServerAddress string, Authentication
 		return "", fmt.Errorf("received nil response from gRPC server for key '%s'", key)
 	}
 	return retrieveResp.GetValue(), nil // Return nil error on success
+}
+
+// GrpcimpleRetrieve is deprecated. Use GrpcSimpleRetrieve instead.
+func GrpcimpleRetrieve(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, opts ...grpc.DialOption) (string, error) {
+	return GrpcSimpleRetrieve(ctx, ServerAddress, AuthenticationPassword, key, opts...)
 }
 
 // GrpcSimpleRetrieveWithMTLS retrieves a value from the parameter store using gRPC with mTLS.
