@@ -15,7 +15,6 @@ import (
 
 // Store original functions to restore them after tests
 var (
-	originalRetrieveFunc func(c *ParameterStoreClient, key, secret string) (string, error)
 	originalOsGetenvFunc func(key string) string
 	mu                   sync.Mutex // Mutex to protect access to global function variables
 )
@@ -23,7 +22,6 @@ var (
 func setupTest() {
 	mu.Lock()
 	// Store the original functions assigned to our package variables
-	originalRetrieveFunc = RetrieveFunc
 	originalOsGetenvFunc = osGetenvFunc
 	mu.Unlock()
 }
@@ -31,7 +29,6 @@ func setupTest() {
 func teardownTest() {
 	mu.Lock()
 	// Restore the original functions
-	RetrieveFunc = originalRetrieveFunc
 	osGetenvFunc = originalOsGetenvFunc
 	mu.Unlock()
 }
@@ -378,11 +375,13 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set mocks for this test case by assigning to package variables
+			// Set mocks for this test case
 			mu.Lock()
-			RetrieveFunc = tt.mockRetrieve
 			osGetenvFunc = tt.mockGetenv
 			mu.Unlock()
+
+			// Assign the mock retrieve function to the client
+			tt.client.RetrieveFunc = tt.mockRetrieve
 
 			config := tt.initialConfig // Make a copy
 			if tt.prePopulatedValue != "" {

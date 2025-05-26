@@ -2,15 +2,15 @@ package client
 
 import (
 	"bytes"
-	"encoding/json"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 )
 
 type APIClient struct {
@@ -35,7 +35,7 @@ func NewAPIClientWithMTLS(baseURL, authenticationPassword, clientCertFile, clien
 	}
 
 	// Load CA cert
-	caCertPEM, err := ioutil.ReadFile(caCertFile)
+	caCertPEM, err := os.ReadFile(caCertFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read CA cert: %w", err)
 	}

@@ -6,7 +6,7 @@ A Go client library for interacting with a parameter store service via gRPC. It 
 
 ## Features
 
-*   **gRPC Client:** Functions (`GrpcSimpleStore`, `GrpcimpleRetrieve`) to interact with a gRPC-based parameter store service.
+*   **gRPC Client:** Functions (`GrpcSimpleStore`, `GrpcSimpleRetrieve`) to interact with a gRPC-based parameter store service.
 *   **Configuration Helper:** A `ParameterStoreClient` for connection details and a `ParameterStoreConfig` struct with an `Init` method to retrieve configuration values, checking the parameter store first and falling back to environment variables.
 *   **Context Handling:** gRPC client functions utilize `context.Context` for timeouts and cancellation.
 *   **Testable:** Includes mocks and tests for both the gRPC client and the configuration helper.
@@ -53,7 +53,7 @@ func main() {
 	fmt.Printf("Successfully stored value for key '%s'\n", key)
 
 	// Retrieve a value
-	retrievedValue, err := client.GrpcimpleRetrieve(ctx, serverAddr, password, key)
+    retrievedValue, err := client.GrpcSimpleRetrieve(ctx, serverAddr, password, key)
 	if err != nil {
 		log.Fatalf("Failed to retrieve value: %v", err)
 	}

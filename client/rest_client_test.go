@@ -5,7 +5,6 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"io/ioutil"
 	"math/big"
 	"net/http"
 	"os"
@@ -39,14 +38,14 @@ func createDummyCertFilesForREST(t *testing.T, makeCACertInvalid bool) (certFile
 	if makeCACertInvalid {
 		caPEM = []byte("invalid")
 	}
-	dir, err := ioutil.TempDir("", "rest-mtls-test-certs")
+	dir, err := os.MkdirTemp("", "rest-mtls-test-certs")
 	assert.NoError(t, err)
 	certFile = filepath.Join(dir, "client.crt")
 	keyFile = filepath.Join(dir, "client.key")
 	caFile = filepath.Join(dir, "ca.crt")
-	assert.NoError(t, ioutil.WriteFile(certFile, certPEM, 0600))
-	assert.NoError(t, ioutil.WriteFile(keyFile, keyPEM, 0600))
-	assert.NoError(t, ioutil.WriteFile(caFile, caPEM, 0600))
+	assert.NoError(t, os.WriteFile(certFile, certPEM, 0600))
+	assert.NoError(t, os.WriteFile(keyFile, keyPEM, 0600))
+	assert.NoError(t, os.WriteFile(caFile, caPEM, 0600))
 	cleanup = func() { os.RemoveAll(dir) }
 	return
 }

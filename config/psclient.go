@@ -2,13 +2,9 @@ package config
 
 import (
 	"fmt"
-	"os" // Added for os.ReadFile
+	"os"
 	"time"
 )
-
-// RetrieveFunc is the function that will be used to retrieve values from the parameter store.
-// It must be initialized by the application before using ParameterStoreClient.
-var RetrieveFunc func(c *ParameterStoreClient, key, secret string) (string, error)
 
 // CertificateSource holds either a file path to a certificate/key or its raw byte content.
 type CertificateSource struct {
@@ -47,6 +43,9 @@ type ParameterStoreClient struct {
 	ClientCert CertificateSource
 	ClientKey  CertificateSource
 	CACert     CertificateSource
+	// RetrieveFunc is the function used to fetch values from the parameter store.
+	// Applications must set this before calling methods that access the store.
+	RetrieveFunc func(c *ParameterStoreClient, key, secret string) (string, error)
 }
 
 // NewParameterStoreClient creates a new client for the parameter store.
@@ -95,10 +94,10 @@ func NewParameterStoreClient(
 // retrieve fetches a value for the given key using the provided secret.
 // It automatically uses mTLS if certificate sources are properly configured.
 func (c *ParameterStoreClient) retrieve(key, secret string) (string, error) {
-	if RetrieveFunc == nil {
-		return "", fmt.Errorf("RetrieveFunc not initialized. Please call config.InitializeRetrieveFunc() after importing the client package")
+	if c.RetrieveFunc == nil {
+		return "", fmt.Errorf("ParameterStoreClient.RetrieveFunc is nil; set it to a retrieval function before use")
 	}
-	return RetrieveFunc(c, key, secret)
+	return c.RetrieveFunc(c, key, secret)
 }
 
 // Placeholder for functions assumed to be defined elsewhere (e.g., client/grpc_client.go or config/helper.go)

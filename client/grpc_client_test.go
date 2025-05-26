@@ -140,7 +140,7 @@ func bufDialer(ctx context.Context, _ string) (net.Conn, error) { // address str
 
 // --- Tests ---
 
-func TestGrpcimpleRetrieve(t *testing.T) {
+func TestGrpcSimpleRetrieve(t *testing.T) {
 	mockPassword := "goodpass"
 	mockKey := "mykey"
 	mockValue := "myvalue"
@@ -165,7 +165,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 			grpc.WithBlock(), // Intentionally used for testing despite deprecation warning
 			// It ensures connection attempt is synchronous for test
 		}
-		val, err := GrpcimpleRetrieve(ctxBg, "bufnet", mockPassword, mockKey, opts...)
+		val, err := GrpcSimpleRetrieve(ctxBg, "bufnet", mockPassword, mockKey, opts...)
 
 		assert.NoError(t, err)
 		assert.Equal(t, mockValue, val)
@@ -181,7 +181,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(), // Intentionally used for testing despite deprecation warning
 		}
-		_, err := GrpcimpleRetrieve(ctxBg, "bufnet", "wrongpass", mockKey, opts...)
+		_, err := GrpcSimpleRetrieve(ctxBg, "bufnet", "wrongpass", mockKey, opts...)
 
 		assert.Error(t, err)
 		// _, ok := status.FromError(err) // Remove unused st, ok
@@ -200,7 +200,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(), // Intentionally used for testing despite deprecation warning
 		}
-		_, err := GrpcimpleRetrieve(ctxBg, "bufnet", mockPassword, "nonexistentkey", opts...)
+		_, err := GrpcSimpleRetrieve(ctxBg, "bufnet", mockPassword, "nonexistentkey", opts...)
 
 		assert.Error(t, err)
 		// _, ok := status.FromError(err) // Remove unused st, ok
@@ -219,7 +219,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(), // Intentionally used for testing despite deprecation warning
 		}
-		_, err := GrpcimpleRetrieve(ctxBg, "bufnet", mockPassword, mockKey, opts...)
+		_, err := GrpcSimpleRetrieve(ctxBg, "bufnet", mockPassword, mockKey, opts...)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "internal server failure", "Error message should contain simulated error")
@@ -241,7 +241,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(), // Intentionally used for testing despite deprecation warning
 		}
-		_, err := GrpcimpleRetrieve(ctx, "bufnet", mockPassword, mockKey, opts...)
+		_, err := GrpcSimpleRetrieve(ctx, "bufnet", mockPassword, mockKey, opts...)
 
 		assert.Error(t, err)
 		// Check if the error is context deadline exceeded or contains the message
@@ -262,7 +262,7 @@ func TestGrpcimpleRetrieve(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(), // Intentionally used for testing despite deprecation warning - makes connection attempt respect context timeout
 		}
-		_, err := GrpcimpleRetrieve(ctx, "bufnet", mockPassword, mockKey, opts...)
+		_, err := GrpcSimpleRetrieve(ctx, "bufnet", mockPassword, mockKey, opts...)
 
 		assert.Error(t, err)
 		// Error message may vary, but should indicate a connection issue
