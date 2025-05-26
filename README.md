@@ -2,7 +2,7 @@
 
 A Go client library for interacting with a parameter store service via gRPC. It provides functions to store and retrieve key-value pairs and includes configuration helpers to fetch values, prioritizing the parameter store over environment variables.
 
-[![Go CI](https://github.com/Suhaibinator/SuhaibParameterStoreClient/actions/workflows/go-ci.yml/badge.svg?event=workflow_run)](https://github.com/Suhaibinator/SuhaibParameterStoreClient/actions/workflows/go-ci.yml)
+[![Go CI](https://github.com/Suhaibinator/SuhaibParameterStoreClient/actions/workflows/go-ci.yml/badge.svg)](https://github.com/Suhaibinator/SuhaibParameterStoreClient/actions/workflows/go-ci.yml)
 
 ## Features
 
