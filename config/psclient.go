@@ -4,7 +4,11 @@ import (
 	"fmt"
 	"os"
 	"time"
+	_ "unsafe"
 )
+
+//go:linkname defaultRetrieveFunc github.com/Suhaibinator/SuhaibParameterStoreClient/client.RetrieveWithClient
+var defaultRetrieveFunc func(c *ParameterStoreClient, key, secret string) (string, error)
 
 // CertificateSource holds either a file path to a certificate/key or its raw byte content.
 type CertificateSource struct {
@@ -82,12 +86,13 @@ func NewParameterStoreClient(
 	}
 
 	return &ParameterStoreClient{
-		Host:       host,
-		Port:       port,
-		Timeout:    timeout,
-		ClientCert: clientCert,
-		ClientKey:  clientKey,
-		CACert:     caCert,
+		Host:         host,
+		Port:         port,
+		Timeout:      timeout,
+		ClientCert:   clientCert,
+		ClientKey:    clientKey,
+		CACert:       caCert,
+		RetrieveFunc: defaultRetrieveFunc,
 	}, nil
 }
 
