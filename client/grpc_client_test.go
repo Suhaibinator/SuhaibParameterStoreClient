@@ -22,7 +22,6 @@ import (
 	"math/big"
 	"os"
 
-	psconfig "github.com/Suhaibinator/SuhaibParameterStoreClient/config"
 	pb "github.com/Suhaibinator/SuhaibParameterStoreClient/proto" // Adjust import path if needed
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
@@ -382,16 +381,16 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 
 	t.Run("Successful mTLS config", func(t *testing.T) {
 		// Create a client config with valid cert files
-		clientConfig := &psconfig.ParameterStoreClient{
+		clientConfig := &Client{
 			Host: "localhost",
 			Port: 50051,
-			ClientCert: psconfig.CertificateSource{
+			ClientCert: CertificateSource{
 				FilePath: clientCertPath,
 			},
-			ClientKey: psconfig.CertificateSource{
+			ClientKey: CertificateSource{
 				FilePath: clientKeyPath,
 			},
-			CACert: psconfig.CertificateSource{
+			CACert: CertificateSource{
 				FilePath: caCertPath,
 			},
 		}
@@ -410,16 +409,16 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 
 	t.Run("Missing client cert", func(t *testing.T) {
 		// Create a client config with a nonexistent client cert file
-		clientConfig := &psconfig.ParameterStoreClient{
+		clientConfig := &Client{
 			Host: "localhost",
 			Port: 50051,
-			ClientCert: psconfig.CertificateSource{
+			ClientCert: CertificateSource{
 				FilePath: "nonexistent.pem",
 			},
-			ClientKey: psconfig.CertificateSource{
+			ClientKey: CertificateSource{
 				FilePath: clientKeyPath,
 			},
-			CACert: psconfig.CertificateSource{
+			CACert: CertificateSource{
 				FilePath: caCertPath,
 			},
 		}
@@ -430,16 +429,16 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 
 	t.Run("Missing client key", func(t *testing.T) {
 		// Create a client config with missing client key
-		clientConfig := &psconfig.ParameterStoreClient{
+		clientConfig := &Client{
 			Host: "localhost",
 			Port: 50051,
-			ClientCert: psconfig.CertificateSource{
+			ClientCert: CertificateSource{
 				FilePath: clientCertPath,
 			},
-			ClientKey: psconfig.CertificateSource{
+			ClientKey: CertificateSource{
 				FilePath: "nonexistent.key",
 			},
-			CACert: psconfig.CertificateSource{
+			CACert: CertificateSource{
 				FilePath: caCertPath,
 			},
 		}
@@ -451,16 +450,16 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 
 	t.Run("Missing CA cert", func(t *testing.T) {
 		// Create a client config with missing CA cert
-		clientConfig := &psconfig.ParameterStoreClient{
+		clientConfig := &Client{
 			Host: "localhost",
 			Port: 50051,
-			ClientCert: psconfig.CertificateSource{
+			ClientCert: CertificateSource{
 				FilePath: clientCertPath,
 			},
-			ClientKey: psconfig.CertificateSource{
+			ClientKey: CertificateSource{
 				FilePath: clientKeyPath,
 			},
-			CACert: psconfig.CertificateSource{
+			CACert: CertificateSource{
 				FilePath: "nonexistent.pem",
 			},
 		}
@@ -472,16 +471,16 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 
 	t.Run("Empty client cert path", func(t *testing.T) {
 		// Create a client config with empty client cert path
-		clientConfig := &psconfig.ParameterStoreClient{
+		clientConfig := &Client{
 			Host: "localhost",
 			Port: 50051,
-			ClientCert: psconfig.CertificateSource{
+			ClientCert: CertificateSource{
 				FilePath: "",
 			},
-			ClientKey: psconfig.CertificateSource{
+			ClientKey: CertificateSource{
 				FilePath: clientKeyPath,
 			},
-			CACert: psconfig.CertificateSource{
+			CACert: CertificateSource{
 				FilePath: caCertPath,
 			},
 		}

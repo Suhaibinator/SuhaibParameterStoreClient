@@ -2,18 +2,14 @@ package client
 
 import (
 	"context"
-	"fmt"
-	"log"
-	"os" // Added for os.ReadFile
-
-	psconfig "github.com/Suhaibinator/SuhaibParameterStoreClient/config" // Added import
-	pb "github.com/Suhaibinator/SuhaibParameterStoreClient/proto"
-
-	"time"
-
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
+	"log"
+	"os"
+	"time"
 
+	pb "github.com/Suhaibinator/SuhaibParameterStoreClient/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -30,38 +26,6 @@ import (
 // 3. Timeout/cancellation of subsequent RPC calls (e.g., client.Retrieve(ctx, ...)).
 var GRPCDialContextFunc = grpc.NewClient
 
-// RetrieveWithClient implements the actual retrieval logic for ParameterStoreClient.
-// Applications may assign this to ParameterStoreClient.RetrieveFunc.
-func RetrieveWithClient(c *psconfig.ParameterStoreClient, key, secret string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
-	defer cancel()
-
-	serverAddress := fmt.Sprintf("%s:%v", c.Host, c.Port)
-
-	var (
-		value string
-		err   error
-	)
-
-	useMTLS := c.ClientCert.IsProvided() &&
-		c.ClientKey.IsProvided() &&
-		c.CACert.IsProvided()
-
-	if useMTLS {
-		value, err = GrpcSimpleRetrieveWithMTLS(ctx, serverAddress, secret, key, c)
-	} else {
-		value, err = GrpcSimpleRetrieve(ctx, serverAddress, secret, key)
-	}
-
-	if err != nil && ctx.Err() == context.DeadlineExceeded {
-		return "", fmt.Errorf("parameter store operation timed out: %w", err)
-	}
-
-	return value, err
-}
-
-// Optionally, packages can set RetrieveWithClient as the RetrieveFunc on their
-// ParameterStoreClient instances during initialization.
 // Default timeout for gRPC operations if no context deadline is set.
 const defaultGrpcTimeout = 5 * time.Second
 
@@ -139,8 +103,8 @@ func GrpcimpleRetrieve(ctx context.Context, ServerAddress string, Authentication
 }
 
 // GrpcSimpleRetrieveWithMTLS retrieves a value from the parameter store using gRPC with mTLS.
-// It accepts a context, server details, a key, a ParameterStoreClient config, and optional grpc.DialOptions.
-func GrpcSimpleRetrieveWithMTLS(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *psconfig.ParameterStoreClient, opts ...grpc.DialOption) (val string, err error) {
+// It accepts a context, server details, a key, a Client config, and optional grpc.DialOptions.
+func GrpcSimpleRetrieveWithMTLS(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientConfig *Client, opts ...grpc.DialOption) (val string, err error) {
 	// Ensure context has a deadline.
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc

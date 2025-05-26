@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-
-	// "github.com/Suhaibinator/SuhaibParameterStoreClient/client" // Removed to break import cycle
 )
 
 // --- Function variables for mocking dependencies ---
@@ -46,7 +44,7 @@ type ParameterStoreConfig struct {
 // 2. Retrieve from the parameter store using the provided key and secret (and mTLS certs if available).
 // 3. Retrieve from the environment variable using the provided environment variable key.
 // If all methods fail, it returns an error.
-func setValueIfEmpty(client *ParameterStoreClient, value, parameterStoreKey, parameterStoreSecret, envVarKey string) (string, error) {
+func setValueIfEmpty(psClient ParameterStoreRetriever, value, parameterStoreKey, parameterStoreSecret, envVarKey string) (string, error) {
 	// If a value is already provided, return it immediately.
 	if value != "" {
 		return value, nil
@@ -54,8 +52,8 @@ func setValueIfEmpty(client *ParameterStoreClient, value, parameterStoreKey, par
 
 	var err error
 	// Attempt to retrieve the value from the parameter store.
-	if client != nil {
-		value, err = client.retrieve(parameterStoreKey, parameterStoreSecret)
+	if psClient != nil {
+		value, err = psClient.Retrieve(parameterStoreKey, parameterStoreSecret)
 	}
 	if err == nil && value != "" {
 		// If retrieval was successful and value is not empty, return it.
@@ -90,7 +88,7 @@ func setValueIfEmpty(client *ParameterStoreClient, value, parameterStoreKey, par
 // It uses the provided ParameterStoreClient for retrieval from the parameter store.
 // If ParameterStoreValue is already set, this function does nothing.
 // It panics if it fails to retrieve the value from all sources.
-func (c *ParameterStoreConfig) Init(client *ParameterStoreClient) {
+func (c *ParameterStoreConfig) Init(psClient ParameterStoreRetriever) {
 	// Only proceed if the value isn't already set
 	if c.ParameterStoreValue != "" {
 		return
@@ -104,7 +102,7 @@ func (c *ParameterStoreConfig) Init(client *ParameterStoreClient) {
 	// Use setValueIfEmpty to populate ParameterStoreValue based on the defined priority.
 	// Pass the necessary connection details and the struct's fields.
 	retrievedValue, err := setValueIfEmpty(
-		client,
+		psClient,
 		c.ParameterStoreValue, // Pass the current value (should be empty here)
 		c.ParameterStoreKey,
 		c.ParameterStoreSecret,

@@ -1,15 +1,18 @@
 # SuhaibParameterStoreClient
 
-A Go client library for interacting with a parameter store service via gRPC. It provides functions to store and retrieve key-value pairs and includes configuration helpers to fetch values, prioritizing the parameter store over environment variables.
+A Go client library for interacting with a parameter store service via gRPC. It provides a clean, intuitive API to store and retrieve key-value pairs with optional mTLS support and configuration helpers.
 
 [![Go CI](https://github.com/Suhaibinator/SuhaibParameterStoreClient/actions/workflows/go-ci.yml/badge.svg)](https://github.com/Suhaibinator/SuhaibParameterStoreClient/actions/workflows/go-ci.yml)
 
 ## Features
 
-*   **gRPC Client:** Functions (`GrpcSimpleStore`, `GrpcSimpleRetrieve`) to interact with a gRPC-based parameter store service.
-*   **Configuration Helper:** A `ParameterStoreClient` for connection details and a `ParameterStoreConfig` struct with an `Init` method to retrieve configuration values, checking the parameter store first and falling back to environment variables.
-*   **Context Handling:** gRPC client functions utilize `context.Context` for timeouts and cancellation.
-*   **Testable:** Includes mocks and tests for both the gRPC client and the configuration helper.
+*   **Simple API:** Intuitive client with direct `Retrieve()` and `Store()` methods
+*   **gRPC Support:** High-performance communication with parameter store service
+*   **mTLS Support:** Built-in support for mutual TLS authentication
+*   **Configuration Helper:** Smart configuration loading with parameter store priority and environment variable fallback
+*   **Flexible Options:** Use functional options pattern for clean configuration
+*   **Context Support:** Full support for timeouts and cancellation
+*   **Well Tested:** Comprehensive test coverage with mocks
 
 ## Installation
 
@@ -17,217 +20,205 @@ A Go client library for interacting with a parameter store service via gRPC. It 
 go get github.com/Suhaibinator/SuhaibParameterStoreClient
 ```
 
-*(Note: Replace the import path if your repository location is different)*
+## Quick Start
 
-## Usage
-
-### Direct gRPC Client Usage
+### Basic Client Usage
 
 ```go
 package main
 
 import (
-	"context"
-	"fmt"
-	"log"
-	"time"
+    "fmt"
+    "log"
+    "time"
 
-	"github.com/Suhaibinator/SuhaibParameterStoreClient/client"
+    "github.com/Suhaibinator/SuhaibParameterStoreClient/client"
 )
 
 func main() {
-	serverAddr := "localhost:50051" // Replace with your gRPC server address
-	password := "your-secret-password"
-	key := "my-config-key"
-	value := "my-config-value"
+    // Create a client with default settings
+    psClient, err := client.NewClient("localhost", 50051)
+    if err != nil {
+        log.Fatal(err)
+    }
 
-	// Use a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+    // Store a value
+    err = psClient.Store("my-key", "my-secret", "my-value")
+    if err != nil {
+        log.Fatal(err)
+    }
 
-	// Store a value
-	err := client.GrpcSimpleStore(ctx, serverAddr, password, key, value)
-	if err != nil {
-		log.Fatalf("Failed to store value: %v", err)
-	}
-	fmt.Printf("Successfully stored value for key '%s'\n", key)
-
-	// Retrieve a value
-    retrievedValue, err := client.GrpcSimpleRetrieve(ctx, serverAddr, password, key)
-	if err != nil {
-		log.Fatalf("Failed to retrieve value: %v", err)
-	}
-	fmt.Printf("Successfully retrieved value for key '%s': %s\n", key, retrievedValue)
+    // Retrieve a value
+    value, err := psClient.Retrieve("my-key", "my-secret")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Retrieved value: %s\n", value)
 }
 ```
 
-### Configuration Helper Usage
+### Client with Options
+
+```go
+// Create a client with custom timeout
+psClient, err := client.NewClient("localhost", 50051,
+    client.WithTimeout(10 * time.Second),
+)
+
+// Create a client with mTLS
+psClient, err := client.NewClient("localhost", 50051,
+    client.WithMTLS(
+        client.CertificateSource{FilePath: "/path/to/client.crt"},
+        client.CertificateSource{FilePath: "/path/to/client.key"},
+        client.CertificateSource{FilePath: "/path/to/ca.crt"},
+    ),
+)
+
+// You can also use certificate bytes directly
+psClient, err := client.NewClient("localhost", 50051,
+    client.WithMTLS(
+        client.CertificateSource{Bytes: clientCertBytes},
+        client.CertificateSource{Bytes: clientKeyBytes},
+        client.CertificateSource{Bytes: caCertBytes},
+    ),
+)
+```
+
+## Configuration Helper
+
+The configuration helper provides a convenient way to load configuration values with automatic fallback:
+
+1. First, it checks if a value is already set
+2. Then tries to retrieve from the parameter store
+3. Falls back to environment variables if parameter store fails
+4. Panics if no value is found (fail-fast approach)
+
+### Basic Configuration Usage
 
 ```go
 package main
 
 import (
-	"fmt"
-	"log"
-	"os"
-	"time"
+    "fmt"
+    "log"
+    "os"
+    "time"
 
-	"github.com/Suhaibinator/SuhaibParameterStoreClient/config"
+    "github.com/Suhaibinator/SuhaibParameterStoreClient/client"
+    "github.com/Suhaibinator/SuhaibParameterStoreClient/config"
 )
 
 func main() {
-	// Example: Set an environment variable as a fallback
-	os.Setenv("MY_APP_API_KEY_ENV", "env-api-key-123")
-	defer os.Unsetenv("MY_APP_API_KEY_ENV") // Clean up env var
+    // Set up a fallback environment variable
+    os.Setenv("MY_APP_API_KEY", "env-api-key-123")
+    
+    // Create the parameter store client
+    psClient, err := client.NewClient("localhost", 50051,
+        client.WithTimeout(3 * time.Second),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
 
-        paramStoreHost := "localhost" // Replace with your parameter store host
-        paramStorePort := 50051       // Replace with your parameter store port
-        paramStoreTimeout := 3 * time.Second
+    // Define your configuration
+    appConfig := struct {
+        APIKey config.ParameterStoreConfig
+        DBPassword config.ParameterStoreConfig
+    }{
+        APIKey: config.ParameterStoreConfig{
+            ParameterStoreKey:      "my-app/api-key",
+            ParameterStoreSecret:   "secret-password",
+            EnvironmentVariableKey: "MY_APP_API_KEY",
+        },
+        DBPassword: config.ParameterStoreConfig{
+            ParameterStoreKey:      "my-app/db-password",
+            ParameterStoreSecret:   "secret-password",
+            EnvironmentVariableKey: "MY_APP_DB_PASSWORD",
+        },
+    }
 
-        // You can build the client manually or use NewParameterStoreClient.
-        // NewParameterStoreClient sets RetrieveFunc to client.RetrieveWithClient
-        // so Init works without extra configuration.
-        client, err := config.NewParameterStoreClient(
-                paramStoreHost,
-                paramStorePort,
-                paramStoreTimeout,
-                config.CertificateSource{}, // client cert
-                config.CertificateSource{}, // client key
-                config.CertificateSource{}, // CA cert
-        )
-        if err != nil {
-                log.Fatalf("failed to create client: %v", err)
-        }
+    // Initialize configuration values
+    appConfig.APIKey.Init(psClient)
+    appConfig.DBPassword.Init(psClient)
 
-	// Define the configuration structure
-	appConfig := struct {
-		APIKey config.ParameterStoreConfig
-		// Add other config fields as needed
-	}{
-		APIKey: config.ParameterStoreConfig{
-			ParameterStoreKey:     "my-app/api-key",       // Key in the parameter store
-			ParameterStoreSecret:  "your-secret-password", // Password for the store
-			EnvironmentVariableKey: "MY_APP_API_KEY_ENV",   // Fallback environment variable
-			// ParameterStoreValue can be pre-filled to skip retrieval
-		},
-	}
-
-        // Initialize the APIKey field using the client
-        // This will try the parameter store first, then the environment variable.
-        // It will panic if neither provides a value.
-        appConfig.APIKey.Init(client)
-
-	fmt.Printf("Initialized API Key: %s\n", appConfig.APIKey.ParameterStoreValue)
-
-	// Use the initialized value
-	// ... your application logic using appConfig.APIKey.ParameterStoreValue ...
-}
-
-```
-
-## Using mTLS for Secure Communication
-
-This client library supports Mutual TLS (mTLS) for establishing secure, authenticated connections to both gRPC and REST-based parameter store services. When mTLS is configured, the client and server authenticate each other using X.509 certificates.
-
-### gRPC Client with mTLS
-
-To communicate with a gRPC server requiring mTLS, use the dedicated `GrpcSimpleRetrieveWithMTLS` and `GrpcSimpleStoreWithMTLS` functions. These functions require paths to the client's certificate, the client's private key, and the CA certificate that signed the server's certificate.
-
-**Functions:**
-
-*   `client.GrpcSimpleRetrieveWithMTLS(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, clientCertFile string, clientKeyFile string, caCertFile string, opts ...grpc.DialOption) (val string, err error)`
-*   `client.GrpcSimpleStoreWithMTLS(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, value string, clientCertFile string, clientKeyFile string, caCertFile string, opts ...grpc.DialOption) (err error)`
-
-**Parameters for mTLS:**
-
-*   `clientCertFile (string)`: Path to the client's PEM-encoded certificate file.
-*   `clientKeyFile (string)`: Path to the client's PEM-encoded private key file.
-*   `caCertFile (string)`: Path to the PEM-encoded CA certificate file for verifying the server.
-
-**Example Snippet:**
-
-```go
-// Assuming clientCertPath, clientKeyPath, caCertPath are defined
-retrievedValue, err := client.GrpcSimpleRetrieveWithMTLS(ctx, serverAddr, password, key, clientCertPath, clientKeyPath, caCertPath)
-if err != nil {
-    log.Fatalf("Failed to retrieve value with mTLS: %v", err)
-}
-// ...
-err = client.GrpcSimpleStoreWithMTLS(ctx, serverAddr, password, key, value, clientCertPath, clientKeyPath, caCertPath)
-if err != nil {
-    log.Fatalf("Failed to store value with mTLS: %v", err)
+    // Use the values
+    fmt.Printf("API Key: %s\n", appConfig.APIKey.ParameterStoreValue)
+    fmt.Printf("DB Password: %s\n", appConfig.DBPassword.ParameterStoreValue)
 }
 ```
 
-### REST Client with mTLS
-
-For RESTful communication with a server requiring mTLS, use the `NewAPIClientWithMTLS` function to create an `APIClient` instance. This client will be pre-configured with an HTTP transport that handles mTLS.
-
-**Function:**
-
-*   `client.NewAPIClientWithMTLS(baseURL, authenticationPassword, clientCertFile, clientKeyFile, caCertFile string) (*APIClient, error)`
-
-**Parameters for mTLS:**
-
-*   `clientCertFile (string)`: Path to the client's PEM-encoded certificate file.
-*   `clientKeyFile (string)`: Path to the client's PEM-encoded private key file.
-*   `caCertFile (string)`: Path to the PEM-encoded CA certificate file for verifying the server.
-
-**Example Snippet:**
+### Configuration with mTLS
 
 ```go
-// Assuming clientCertPath, clientKeyPath, caCertPath are defined
-apiClient, err := client.NewAPIClientWithMTLS("https://your-server.com/api", password, clientCertPath, clientKeyPath, caCertPath)
-if err != nil {
-    log.Fatalf("Failed to create mTLS API client: %v", err)
-}
-// Use apiClient to .Store() or .Retrieve()
-// value, err := apiClient.Retrieve("some-key")
+// Create client with mTLS
+psClient, err := client.NewClient("localhost", 50051,
+    client.WithTimeout(3 * time.Second),
+    client.WithMTLS(
+        client.CertificateSource{FilePath: "/path/to/client.crt"},
+        client.CertificateSource{FilePath: "/path/to/client.key"},
+        client.CertificateSource{FilePath: "/path/to/ca.crt"},
+    ),
+)
+
+// Use it with configuration helper - mTLS is handled automatically
+appConfig.SecureAPIKey.Init(psClient)
 ```
 
-### Configuration Helper with mTLS
+## Direct gRPC Function Usage
 
-To use mTLS, populate the certificate paths on `ParameterStoreClient`. When these fields are set, `Init` will connect to the parameter store using mTLS.
+For advanced use cases, you can use the lower-level gRPC functions directly:
 
 ```go
-client := &config.ParameterStoreClient{
-    Host:          paramStoreHost,
-    Port:          paramStorePort,
-    Timeout:       paramStoreTimeout,
-    ClientCertFile: "/path/to/client.crt",
-    ClientKeyFile:  "/path/to/client.key",
-    CACertFile:     "/path/to/ca.crt",
-}
+import (
+    "context"
+    "github.com/Suhaibinator/SuhaibParameterStoreClient/client"
+)
 
-appConfig := struct {
-    SecureSetting config.ParameterStoreConfig
-}{
-    SecureSetting: config.ParameterStoreConfig{
-        ParameterStoreKey:     "my-app/secure-setting",
-        ParameterStoreSecret:  "your-secret-password",
-        EnvironmentVariableKey: "MY_APP_SECURE_SETTING_ENV",
-    },
-}
+// Direct gRPC retrieve
+ctx := context.Background()
+value, err := client.GrpcSimpleRetrieve(ctx, "localhost:50051", "password", "key")
 
-// Init will use gRPC with mTLS because the client has certificate paths
-appConfig.SecureSetting.Init(client)
+// Direct gRPC store
+err = client.GrpcSimpleStore(ctx, "localhost:50051", "password", "key", "value")
+```
 
-fmt.Printf("Initialized Secure Setting: %s\n", appConfig.SecureSetting.ParameterStoreValue)
+## REST API Client
+
+The library also includes a REST API client:
+
+```go
+// Create REST API client
+apiClient := client.NewAPIClient("https://your-server.com/api", "your-password")
+
+// Store a value
+err := apiClient.Store("key", "value")
+
+// Retrieve a value
+value, err := apiClient.Retrieve("key")
+
+// Create REST API client with mTLS
+apiClient, err := client.NewAPIClientWithMTLS(
+    "https://your-server.com/api",
+    "your-password",
+    "/path/to/client.crt",
+    "/path/to/client.key",
+    "/path/to/ca.crt",
+)
 ```
 
 ## Testing
 
-To run the tests for this library:
+To run the tests:
 
 ```bash
 go test ./...
 ```
 
-This command will execute all tests in the `client` and `config` packages.
+For verbose output:
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit pull requests or open issues.
+```bash
+go test -v ./...
+```
 
 ## License
 

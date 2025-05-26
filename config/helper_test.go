@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -33,9 +32,17 @@ func teardownTest() {
 	mu.Unlock()
 }
 
-// Define types for our mock functions for clarity
-type mockRetrieveFuncType func(c *ParameterStoreClient, key, secret string) (string, error)
-type mockGetenvFuncType func(key string) string
+// MockClient implements a mock parameter store client for testing
+type MockClient struct {
+	RetrieveFunc func(key, secret string) (string, error)
+}
+
+func (m *MockClient) Retrieve(key, secret string) (string, error) {
+	if m.RetrieveFunc != nil {
+		return m.RetrieveFunc(key, secret)
+	}
+	return "", errors.New("mock retrieve not implemented")
+}
 
 // --- Tests ---
 
@@ -44,30 +51,21 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 	defer teardownTest()
 
 	// Define common test parameters
-	testHost := "localhost"
-	testPort := 1234
-	testTimeout := 100 * time.Millisecond
 	testKey := "test-key"
 	testSecret := "test-secret"
 	testEnvKey := "TEST_ENV_VAR"
-	testEnvValue := "value-from-env"
-	testParamValue := "value-from-param-store"
-	testMtlsParamValue := "value-from-mtls-param-store"
-	dummyClientCert := "client.crt"
-	dummyClientKey := "client.key"
-	dummyCACert := "ca.crt"
+	testEnvValue := "env-value"
 
 	tests := []struct {
 		name                 string
 		initialConfig        ParameterStoreConfig
 		prePopulatedValue    string
 		useEmptyValue        bool
-		mockRetrieve         mockRetrieveFuncType
-		mockGetenv           mockGetenvFuncType
+		mockRetrieve         func(key, secret string) (string, error)
+		mockGetenv           func(key string) string
 		expectedValue        string
 		expectPanic          bool
 		expectedPanicMessage string
-		client               ParameterStoreClient
 	}{
 		{
 			name: "Value already present",
@@ -76,9 +74,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
-			client:            ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
 			prePopulatedValue: "pre-filled-value",
-			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
+			mockRetrieve: func(key, secret string) (string, error) {
 				t.Errorf("RetrieveFunc should not be called when value is pre-filled")
 				return "", errors.New("should not be called")
 			},
@@ -96,14 +93,13 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
-			client:        ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
 			useEmptyValue: true,
-			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
-				t.Errorf("RetrieveFunc should not be called when UseEmptyValue is true and value is initially empty")
+			mockRetrieve: func(key, secret string) (string, error) {
+				t.Errorf("RetrieveFunc should not be called when use empty value flag is true")
 				return "", errors.New("should not be called")
 			},
 			mockGetenv: func(key string) string {
-				t.Errorf("osGetenvFunc should not be called when UseEmptyValue is true and value is initially empty")
+				t.Errorf("osGetenvFunc should not be called when use empty value flag is true")
 				return ""
 			},
 			expectedValue: "",
@@ -116,20 +112,16 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
-			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
-			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
+			mockRetrieve: func(key, secret string) (string, error) {
 				assert.Equal(t, testKey, key)
 				assert.Equal(t, testSecret, secret)
-				assert.Equal(t, testHost, c.Host)
-				assert.Equal(t, testPort, c.Port)
-				assert.Equal(t, testTimeout, c.Timeout)
-				return testParamValue, nil
+				return "param-store-value", nil
 			},
 			mockGetenv: func(key string) string {
-				t.Errorf("osGetenvFunc should not be called")
+				t.Errorf("osGetenvFunc should not be called when param store succeeds")
 				return ""
 			},
-			expectedValue: testParamValue,
+			expectedValue: "param-store-value",
 			expectPanic:   false,
 		},
 		{
@@ -139,36 +131,16 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
-			client: ParameterStoreClient{
-				Host:    testHost,
-				Port:    testPort,
-				Timeout: testTimeout,
-				ClientCert: CertificateSource{
-					FilePath: dummyClientCert,
-				},
-				ClientKey: CertificateSource{
-					FilePath: dummyClientKey,
-				},
-				CACert: CertificateSource{
-					FilePath: dummyCACert,
-				},
-			},
-			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
+			mockRetrieve: func(key, secret string) (string, error) {
 				assert.Equal(t, testKey, key)
 				assert.Equal(t, testSecret, secret)
-				assert.Equal(t, testHost, c.Host)
-				assert.Equal(t, testPort, c.Port)
-				assert.Equal(t, testTimeout, c.Timeout)
-				assert.Equal(t, dummyClientCert, c.ClientCert.FilePath)
-				assert.Equal(t, dummyClientKey, c.ClientKey.FilePath)
-				assert.Equal(t, dummyCACert, c.CACert.FilePath)
-				return testMtlsParamValue, nil
+				return "param-store-value-mtls", nil
 			},
 			mockGetenv: func(key string) string {
-				t.Errorf("osGetenvFunc should not be called")
+				t.Errorf("osGetenvFunc should not be called when param store succeeds")
 				return ""
 			},
-			expectedValue: testMtlsParamValue,
+			expectedValue: "param-store-value-mtls",
 			expectPanic:   false,
 		},
 		{
@@ -178,8 +150,7 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
-			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
-			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
+			mockRetrieve: func(key, secret string) (string, error) {
 				return "", context.DeadlineExceeded
 			},
 			mockGetenv: func(key string) string {
@@ -196,22 +167,7 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
-			client: ParameterStoreClient{
-				Host:    testHost,
-				Port:    testPort,
-				Timeout: testTimeout,
-				ClientCert: CertificateSource{
-					FilePath: dummyClientCert,
-				},
-				ClientKey: CertificateSource{
-					FilePath: dummyClientKey,
-				},
-				CACert: CertificateSource{
-					FilePath: dummyCACert,
-				},
-			},
-			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
-				assert.Equal(t, dummyClientCert, c.ClientCert.FilePath)
+			mockRetrieve: func(key, secret string) (string, error) {
 				return "", context.DeadlineExceeded
 			},
 			mockGetenv: func(key string) string {
@@ -228,8 +184,7 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
-			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
-			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
+			mockRetrieve: func(key, secret string) (string, error) {
 				return "", errors.New("some-grpc-error")
 			},
 			mockGetenv: func(key string) string {
@@ -246,22 +201,7 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
-			client: ParameterStoreClient{
-				Host:    testHost,
-				Port:    testPort,
-				Timeout: testTimeout,
-				ClientCert: CertificateSource{
-					FilePath: dummyClientCert,
-				},
-				ClientKey: CertificateSource{
-					FilePath: dummyClientKey,
-				},
-				CACert: CertificateSource{
-					FilePath: dummyCACert,
-				},
-			},
-			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
-				assert.Equal(t, dummyClientCert, c.ClientCert.FilePath)
+			mockRetrieve: func(key, secret string) (string, error) {
 				return "", errors.New("some-grpc-mtls-error")
 			},
 			mockGetenv: func(key string) string {
@@ -278,9 +218,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
-			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
-			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
-				return "", nil // Success, but empty value
+			mockRetrieve: func(key, secret string) (string, error) {
+				return "", nil // No error, but empty value
 			},
 			mockGetenv: func(key string) string {
 				assert.Equal(t, testEnvKey, key)
@@ -296,23 +235,8 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
-			client: ParameterStoreClient{
-				Host:    testHost,
-				Port:    testPort,
-				Timeout: testTimeout,
-				ClientCert: CertificateSource{
-					FilePath: dummyClientCert,
-				},
-				ClientKey: CertificateSource{
-					FilePath: dummyClientKey,
-				},
-				CACert: CertificateSource{
-					FilePath: dummyCACert,
-				},
-			},
-			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
-				assert.Equal(t, dummyClientCert, c.ClientCert.FilePath)
-				return "", nil // Success, but empty value
+			mockRetrieve: func(key, secret string) (string, error) {
+				return "", nil // No error, but empty value
 			},
 			mockGetenv: func(key string) string {
 				assert.Equal(t, testEnvKey, key)
@@ -328,14 +252,13 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
-			client: ParameterStoreClient{Host: testHost, Port: testPort, Timeout: testTimeout},
-			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
+			mockRetrieve: func(key, secret string) (string, error) {
 				return "", errors.New("param-store-failed")
 			},
 			mockGetenv: func(key string) string {
-				assert.Equal(t, testEnvKey, key)
-				return "" // Env var also fails (empty)
+				return "" // Env var also not set
 			},
+			expectedValue:        "",
 			expectPanic:          true,
 			expectedPanicMessage: fmt.Sprintf("Failed to retrieve value for parameter store key '%s' (checked env var '%s'). Neither parameter store nor environment variable provided a value.", testKey, testEnvKey),
 		},
@@ -346,28 +269,13 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 				ParameterStoreSecret:   testSecret,
 				EnvironmentVariableKey: testEnvKey,
 			},
-			client: ParameterStoreClient{
-				Host:    testHost,
-				Port:    testPort,
-				Timeout: testTimeout,
-				ClientCert: CertificateSource{
-					FilePath: dummyClientCert,
-				},
-				ClientKey: CertificateSource{
-					FilePath: dummyClientKey,
-				},
-				CACert: CertificateSource{
-					FilePath: dummyCACert,
-				},
-			},
-			mockRetrieve: func(c *ParameterStoreClient, key, secret string) (string, error) {
-				assert.Equal(t, dummyClientCert, c.ClientCert.FilePath)
+			mockRetrieve: func(key, secret string) (string, error) {
 				return "", errors.New("param-store-mtls-failed")
 			},
 			mockGetenv: func(key string) string {
-				assert.Equal(t, testEnvKey, key)
-				return "" // Env var also fails (empty)
+				return "" // Env var also not set
 			},
+			expectedValue:        "",
 			expectPanic:          true,
 			expectedPanicMessage: fmt.Sprintf("Failed to retrieve value for parameter store key '%s' (checked env var '%s'). Neither parameter store nor environment variable provided a value.", testKey, testEnvKey),
 		},
@@ -375,35 +283,63 @@ func TestParameterStoreConfig_Init(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set mocks for this test case
-			mu.Lock()
-			osGetenvFunc = tt.mockGetenv
-			mu.Unlock()
-
-			// Assign the mock retrieve function to the client
-			tt.client.RetrieveFunc = tt.mockRetrieve
-
-			config := tt.initialConfig // Make a copy
-			if tt.prePopulatedValue != "" {
-				config.ParameterStoreValue = tt.prePopulatedValue
+			// Create mock client if we need to test retrieval
+			var mockClient ParameterStoreRetriever
+			if tt.mockRetrieve != nil {
+				mockClient = &MockClient{
+					RetrieveFunc: tt.mockRetrieve,
+				}
 			}
+
+			// Set the mock functions
+			if tt.mockGetenv != nil {
+				osGetenvFunc = tt.mockGetenv
+			}
+
+			// Set the pre-populated value if any
+			config := tt.initialConfig
+			config.ParameterStoreValue = tt.prePopulatedValue
 			config.ParameterStoreUseEmptyValue = tt.useEmptyValue
 
+			// Call Init and check for panic
 			if tt.expectPanic {
 				assert.PanicsWithError(t, tt.expectedPanicMessage, func() {
-					config.Init(&tt.client)
-				}, "Expected Init to panic with specific error")
+					config.Init(mockClient)
+				})
 			} else {
 				assert.NotPanics(t, func() {
-					config.Init(&tt.client)
-				}, "Expected Init not to panic")
-				assert.Equal(t, tt.expectedValue, config.ParameterStoreValue, "ParameterStoreValue mismatch")
+					config.Init(mockClient)
+				})
+				assert.Equal(t, tt.expectedValue, config.ParameterStoreValue)
 			}
 		})
 	}
 }
 
-// Note: Testing simpleRetrieveParameterWithTimeout and setValueIfEmpty directly
-// is implicitly covered by testing Init, as Init calls setValueIfEmpty which
-// calls simpleRetrieveParameterWithTimeout. If more granular tests are needed,
-// they can be added similarly, mocking dependencies as required.
+func TestParameterStoreConfig_Init_WithNilClient(t *testing.T) {
+	setupTest()
+	defer teardownTest()
+
+	testKey := "test-key"
+	testSecret := "test-secret"
+	testEnvKey := "TEST_ENV_VAR"
+	testEnvValue := "env-value"
+
+	// Mock osGetenvFunc to return testEnvValue
+	osGetenvFunc = func(key string) string {
+		assert.Equal(t, testEnvKey, key)
+		return testEnvValue
+	}
+
+	config := ParameterStoreConfig{
+		ParameterStoreKey:      testKey,
+		ParameterStoreSecret:   testSecret,
+		EnvironmentVariableKey: testEnvKey,
+	}
+
+	// Call Init with nil client - should fall back to env var
+	assert.NotPanics(t, func() {
+		config.Init(nil)
+	})
+	assert.Equal(t, testEnvValue, config.ParameterStoreValue)
+}
