@@ -84,10 +84,19 @@ func main() {
         paramStorePort := 50051       // Replace with your parameter store port
         paramStoreTimeout := 3 * time.Second
 
-        client := &config.ParameterStoreClient{
-                Host:    paramStoreHost,
-                Port:    paramStorePort,
-                Timeout: paramStoreTimeout,
+        // You can build the client manually or use NewParameterStoreClient.
+        // NewParameterStoreClient sets RetrieveFunc to client.RetrieveWithClient
+        // so Init works without extra configuration.
+        client, err := config.NewParameterStoreClient(
+                paramStoreHost,
+                paramStorePort,
+                paramStoreTimeout,
+                config.CertificateSource{}, // client cert
+                config.CertificateSource{}, // client key
+                config.CertificateSource{}, // CA cert
+        )
+        if err != nil {
+                log.Fatalf("failed to create client: %v", err)
         }
 
 	// Define the configuration structure
