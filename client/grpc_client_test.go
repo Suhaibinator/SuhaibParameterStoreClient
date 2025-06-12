@@ -360,7 +360,7 @@ func TestGrpcSimpleStore(t *testing.T) {
 	})
 }
 
-func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
+func TestGrpcSimpleRetrieveWithTLS(t *testing.T) {
 	// Create a mock function that will be used in the test
 	// Signature matches the new GRPCDialContextFunc: func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
 	mockDialFunc := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
@@ -384,18 +384,20 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 		clientConfig := &Client{
 			Host: "localhost",
 			Port: 50051,
-			ClientCert: CertificateSource{
-				FilePath: clientCertPath,
-			},
-			ClientKey: CertificateSource{
-				FilePath: clientKeyPath,
-			},
-			CACert: CertificateSource{
-				FilePath: caCertPath,
+			TLSConfig: &TLSConfig{
+				ClientCert: CertificateSource{
+					FilePath: clientCertPath,
+				},
+				ClientKey: CertificateSource{
+					FilePath: clientKeyPath,
+				},
+				CACert: CertificateSource{
+					FilePath: caCertPath,
+				},
 			},
 		}
 
-		_, err := GrpcSimpleRetrieveWithMTLS(ctx, "localhost:50051", "password", "key", clientConfig)
+		_, err := GrpcSimpleRetrieveWithTLS(ctx, "localhost:50051", "password", "key", clientConfig.TLSConfig)
 		// We expect an error because the mockDialContext returns an error.
 		// The important part is that we got past cert loading.
 		assert.Error(t, err)
@@ -412,17 +414,19 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 		clientConfig := &Client{
 			Host: "localhost",
 			Port: 50051,
-			ClientCert: CertificateSource{
-				FilePath: "nonexistent.pem",
-			},
-			ClientKey: CertificateSource{
-				FilePath: clientKeyPath,
-			},
-			CACert: CertificateSource{
-				FilePath: caCertPath,
+			TLSConfig: &TLSConfig{
+				ClientCert: CertificateSource{
+					FilePath: "nonexistent.pem",
+				},
+				ClientKey: CertificateSource{
+					FilePath: clientKeyPath,
+				},
+				CACert: CertificateSource{
+					FilePath: caCertPath,
+				},
 			},
 		}
-		_, err := GrpcSimpleRetrieveWithMTLS(ctx, "localhost:50051", "password", "key", clientConfig)
+		_, err := GrpcSimpleRetrieveWithTLS(ctx, "localhost:50051", "password", "key", clientConfig.TLSConfig)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to read certificate/key from nonexistent.pem")
 	})
@@ -432,18 +436,20 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 		clientConfig := &Client{
 			Host: "localhost",
 			Port: 50051,
-			ClientCert: CertificateSource{
-				FilePath: clientCertPath,
-			},
-			ClientKey: CertificateSource{
-				FilePath: "nonexistent.key",
-			},
-			CACert: CertificateSource{
-				FilePath: caCertPath,
+			TLSConfig: &TLSConfig{
+				ClientCert: CertificateSource{
+					FilePath: clientCertPath,
+				},
+				ClientKey: CertificateSource{
+					FilePath: "nonexistent.key",
+				},
+				CACert: CertificateSource{
+					FilePath: caCertPath,
+				},
 			},
 		}
 
-		_, err := GrpcSimpleRetrieveWithMTLS(ctx, "localhost:50051", "password", "key", clientConfig)
+		_, err := GrpcSimpleRetrieveWithTLS(ctx, "localhost:50051", "password", "key", clientConfig.TLSConfig)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to read certificate/key from nonexistent.key")
 	})
@@ -453,18 +459,20 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 		clientConfig := &Client{
 			Host: "localhost",
 			Port: 50051,
-			ClientCert: CertificateSource{
-				FilePath: clientCertPath,
-			},
-			ClientKey: CertificateSource{
-				FilePath: clientKeyPath,
-			},
-			CACert: CertificateSource{
-				FilePath: "nonexistent.pem",
+			TLSConfig: &TLSConfig{
+				ClientCert: CertificateSource{
+					FilePath: clientCertPath,
+				},
+				ClientKey: CertificateSource{
+					FilePath: clientKeyPath,
+				},
+				CACert: CertificateSource{
+					FilePath: "nonexistent.pem",
+				},
 			},
 		}
 
-		_, err := GrpcSimpleRetrieveWithMTLS(ctx, "localhost:50051", "password", "key", clientConfig)
+		_, err := GrpcSimpleRetrieveWithTLS(ctx, "localhost:50051", "password", "key", clientConfig.TLSConfig)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to read certificate/key from nonexistent.pem")
 	})
@@ -474,24 +482,26 @@ func TestGrpcSimpleRetrieveWithMTLS(t *testing.T) {
 		clientConfig := &Client{
 			Host: "localhost",
 			Port: 50051,
-			ClientCert: CertificateSource{
-				FilePath: "",
-			},
-			ClientKey: CertificateSource{
-				FilePath: clientKeyPath,
-			},
-			CACert: CertificateSource{
-				FilePath: caCertPath,
+			TLSConfig: &TLSConfig{
+				ClientCert: CertificateSource{
+					FilePath: "",
+				},
+				ClientKey: CertificateSource{
+					FilePath: clientKeyPath,
+				},
+				CACert: CertificateSource{
+					FilePath: caCertPath,
+				},
 			},
 		}
 
-		_, err := GrpcSimpleRetrieveWithMTLS(ctx, "localhost:50051", "password", "key", clientConfig)
+		_, err := GrpcSimpleRetrieveWithTLS(ctx, "localhost:50051", "password", "key", clientConfig.TLSConfig)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "client certificate data is empty")
+		assert.Contains(t, err.Error(), "no TLS configuration provided")
 	})
 }
 
-func TestGrpcSimpleStoreWithMTLS(t *testing.T) {
+func TestGrpcSimpleStoreWithTLS(t *testing.T) {
 	// Create a mock function that will be used in the test
 	// Signature matches the new GRPCDialContextFunc: func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
 	mockDialFunc := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
@@ -510,7 +520,8 @@ func TestGrpcSimpleStoreWithMTLS(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Successful mTLS config", func(t *testing.T) {
-		err := GrpcSimpleStoreWithMTLS(ctx, "localhost:50051", "password", "key", "value", clientCertPath, clientKeyPath, caCertPath)
+		tlsConfig := NewTLSConfigFromSeparateCerts(clientCertPath, clientKeyPath, caCertPath)
+		err := GrpcSimpleStoreWithTLS(ctx, "localhost:50051", "password", "key", "value", tlsConfig)
 		assert.Error(t, err)
 		// The error message will be about connection refused, but not necessarily the exact mock message
 		assert.Contains(t, err.Error(), "mock dial: connection refused")
@@ -523,21 +534,24 @@ func TestGrpcSimpleStoreWithMTLS(t *testing.T) {
 	})
 
 	t.Run("Missing client cert", func(t *testing.T) {
-		err := GrpcSimpleStoreWithMTLS(ctx, "localhost:50051", "password", "key", "value", "nonexistent.pem", clientKeyPath, caCertPath)
+		tlsConfig := NewTLSConfigFromSeparateCerts("nonexistent.pem", clientKeyPath, caCertPath)
+		err := GrpcSimpleStoreWithTLS(ctx, "localhost:50051", "password", "key", "value", tlsConfig)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load client cert")
+		assert.Contains(t, err.Error(), "failed to get TLS configuration")
 	})
 
 	t.Run("Missing client key", func(t *testing.T) {
-		err := GrpcSimpleStoreWithMTLS(ctx, "localhost:50051", "password", "key", "value", clientCertPath, "nonexistent.key", caCertPath)
+		tlsConfig := NewTLSConfigFromSeparateCerts(clientCertPath, "nonexistent.key", caCertPath)
+		err := GrpcSimpleStoreWithTLS(ctx, "localhost:50051", "password", "key", "value", tlsConfig)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load client cert")
+		assert.Contains(t, err.Error(), "failed to get TLS configuration")
 	})
 
 	t.Run("Missing CA cert", func(t *testing.T) {
-		err := GrpcSimpleStoreWithMTLS(ctx, "localhost:50051", "password", "key", "value", clientCertPath, clientKeyPath, "nonexistent.pem")
+		tlsConfig := NewTLSConfigFromSeparateCerts(clientCertPath, clientKeyPath, "nonexistent.pem")
+		err := GrpcSimpleStoreWithTLS(ctx, "localhost:50051", "password", "key", "value", tlsConfig)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load CA cert")
+		assert.Contains(t, err.Error(), "failed to get TLS configuration")
 	})
 }
 

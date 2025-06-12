@@ -1,18 +1,18 @@
 # SuhaibParameterStoreClient
 
-A Go client library for interacting with a parameter store service via gRPC. It provides a clean, intuitive API to store and retrieve key-value pairs with optional mTLS support and configuration helpers.
+A Go client library for interacting with a parameter store service via gRPC. It provides a clean, modern API to store and retrieve key-value pairs with optional TLS support including PKCS#12 certificates and configuration helpers.
 
 [![Go CI](https://github.com/Suhaibinator/SuhaibParameterStoreClient/actions/workflows/go-ci.yml/badge.svg)](https://github.com/Suhaibinator/SuhaibParameterStoreClient/actions/workflows/go-ci.yml)
 
 ## Features
 
-*   **Simple API:** Intuitive client with direct `Retrieve()` and `Store()` methods
-*   **gRPC Support:** High-performance communication with parameter store service
-*   **mTLS Support:** Built-in support for mutual TLS authentication
+*   **Modern gRPC API:** High-performance communication with type safety
+*   **TLS Support:** Flexible TLS configuration including separate cert/key files and PKCS#12 (.p12) files
+*   **Secure Password Handling:** Built-in secure password callbacks for P12 decryption
 *   **Configuration Helper:** Smart configuration loading with parameter store priority and environment variable fallback
-*   **Flexible Options:** Use functional options pattern for clean configuration
+*   **Functional Options Pattern:** Clean, extensible configuration API
 *   **Context Support:** Full support for timeouts and cancellation
-*   **Well Tested:** Comprehensive test coverage with mocks
+*   **Well Tested:** Comprehensive test coverage
 
 ## Installation
 
@@ -22,7 +22,7 @@ go get github.com/Suhaibinator/SuhaibParameterStoreClient
 
 ## Quick Start
 
-### Basic Client Usage
+### Basic Client Usage (No TLS)
 
 ```go
 package main
@@ -30,13 +30,12 @@ package main
 import (
     "fmt"
     "log"
-    "time"
 
     "github.com/Suhaibinator/SuhaibParameterStoreClient/client"
 )
 
 func main() {
-    // Create a client with default settings
+    // Create a client with default settings (no TLS)
     psClient, err := client.NewClient("localhost", 50051)
     if err != nil {
         log.Fatal(err)
@@ -57,43 +56,112 @@ func main() {
 }
 ```
 
-### Client with Options
+### Client with TLS using Separate Cert/Key Files
 
 ```go
-// Create a client with custom timeout
-psClient, err := client.NewClient("localhost", 50051,
-    client.WithTimeout(10 * time.Second),
+package main
+
+import (
+    "fmt"
+    "log"
+    "time"
+
+    "github.com/Suhaibinator/SuhaibParameterStoreClient/client"
 )
 
-// Create a client with mTLS
-psClient, err := client.NewClient("localhost", 50051,
-    client.WithMTLS(
-        client.CertificateSource{FilePath: "/path/to/client.crt"},
-        client.CertificateSource{FilePath: "/path/to/client.key"},
-        client.CertificateSource{FilePath: "/path/to/ca.crt"},
-    ),
+func main() {
+    // Create TLS configuration from separate cert/key files
+    tlsConfig := client.NewTLSConfigFromSeparateCerts(
+        "/path/to/client.crt",
+        "/path/to/client.key", 
+        "/path/to/ca.crt",
+    )
+
+    // Create client with TLS
+    psClient, err := client.NewClient("localhost", 50051,
+        client.WithTimeout(10*time.Second),
+        client.WithTLS(tlsConfig),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Use the client
+    value, err := psClient.Retrieve("my-key", "my-secret")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Retrieved value: %s\n", value)
+}
+```
+
+### Client with PKCS#12 Certificate
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+
+    "github.com/Suhaibinator/SuhaibParameterStoreClient/client"
 )
 
-// You can also use certificate bytes directly
+func main() {
+    // Create TLS configuration from P12 file with terminal password prompt
+    tlsConfig := client.NewTLSConfigFromP12File(
+        "/path/to/cert.p12",
+        client.DefaultPasswordCallbacks.TerminalPrompt,
+    )
+
+    // Create client with P12 TLS
+    psClient, err := client.NewClient("localhost", 50051,
+        client.WithTLS(tlsConfig),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    value, err := psClient.Retrieve("my-key", "my-secret")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Retrieved value: %s\n", value)
+}
+```
+
+### PKCS#12 with Environment Variable Password
+
+```go
+// Create P12 config with password from environment variable
+tlsConfig := client.NewTLSConfigFromP12File(
+    "/path/to/cert.p12",
+    client.DefaultPasswordCallbacks.EnvVar("P12_PASSWORD"),
+)
+
 psClient, err := client.NewClient("localhost", 50051,
-    client.WithMTLS(
-        client.CertificateSource{Bytes: clientCertBytes},
-        client.CertificateSource{Bytes: clientKeyBytes},
-        client.CertificateSource{Bytes: caCertBytes},
-    ),
+    client.WithTLS(tlsConfig),
+)
+```
+
+### PKCS#12 with Custom Password Callback
+
+```go
+// Custom password callback
+customPasswordFn := func() (string, error) {
+    // Your custom logic here (e.g., read from secure vault)
+    return getPasswordFromVault(), nil
+}
+
+tlsConfig := client.NewTLSConfigFromP12File(
+    "/path/to/cert.p12", 
+    customPasswordFn,
 )
 ```
 
 ## Configuration Helper
 
-The configuration helper provides a convenient way to load configuration values with automatic fallback:
-
-1. First, it checks if a value is already set
-2. Then tries to retrieve from the parameter store
-3. Falls back to environment variables if parameter store fails
-4. Panics if no value is found (fail-fast approach)
-
-### Basic Configuration Usage
+The configuration helper provides automatic fallback from parameter store to environment variables:
 
 ```go
 package main
@@ -114,7 +182,7 @@ func main() {
     
     // Create the parameter store client
     psClient, err := client.NewClient("localhost", 50051,
-        client.WithTimeout(3 * time.Second),
+        client.WithTimeout(3*time.Second),
     )
     if err != nil {
         log.Fatal(err)
@@ -138,6 +206,7 @@ func main() {
     }
 
     // Initialize configuration values
+    // This will try parameter store first, then fall back to env vars
     appConfig.APIKey.Init(psClient)
     appConfig.DBPassword.Init(psClient)
 
@@ -147,26 +216,11 @@ func main() {
 }
 ```
 
-### Configuration with mTLS
+## Advanced Usage
 
-```go
-// Create client with mTLS
-psClient, err := client.NewClient("localhost", 50051,
-    client.WithTimeout(3 * time.Second),
-    client.WithMTLS(
-        client.CertificateSource{FilePath: "/path/to/client.crt"},
-        client.CertificateSource{FilePath: "/path/to/client.key"},
-        client.CertificateSource{FilePath: "/path/to/ca.crt"},
-    ),
-)
+### Direct gRPC Function Usage
 
-// Use it with configuration helper - mTLS is handled automatically
-appConfig.SecureAPIKey.Init(psClient)
-```
-
-## Direct gRPC Function Usage
-
-For advanced use cases, you can use the lower-level gRPC functions directly:
+For lower-level control, you can use the direct gRPC functions:
 
 ```go
 import (
@@ -174,36 +228,75 @@ import (
     "github.com/Suhaibinator/SuhaibParameterStoreClient/client"
 )
 
-// Direct gRPC retrieve
+// Direct gRPC retrieve (no TLS)
 ctx := context.Background()
 value, err := client.GrpcSimpleRetrieve(ctx, "localhost:50051", "password", "key")
 
-// Direct gRPC store
+// Direct gRPC store (no TLS)
 err = client.GrpcSimpleStore(ctx, "localhost:50051", "password", "key", "value")
+
+// Direct gRPC with TLS
+tlsConfig := client.NewTLSConfigFromP12File("/path/to/cert.p12", passwordCallback)
+value, err := client.GrpcSimpleRetrieveWithTLS(ctx, "localhost:50051", "password", "key", tlsConfig)
+err = client.GrpcSimpleStoreWithTLS(ctx, "localhost:50051", "password", "key", "value", tlsConfig)
 ```
 
-## REST API Client
+## TLS Configuration Options
 
-The library also includes a REST API client:
-
+### Separate Certificate Files
 ```go
-// Create REST API client
-apiClient := client.NewAPIClient("https://your-server.com/api", "your-password")
-
-// Store a value
-err := apiClient.Store("key", "value")
-
-// Retrieve a value
-value, err := apiClient.Retrieve("key")
-
-// Create REST API client with mTLS
-apiClient, err := client.NewAPIClientWithMTLS(
-    "https://your-server.com/api",
-    "your-password",
+tlsConfig := client.NewTLSConfigFromSeparateCerts(
     "/path/to/client.crt",
     "/path/to/client.key",
     "/path/to/ca.crt",
 )
+```
+
+### Certificate Data in Memory
+```go
+tlsConfig := client.NewTLSConfigFromSeparateCertBytes(
+    clientCertData, // []byte
+    clientKeyData,  // []byte
+    caCertData,     // []byte
+)
+```
+
+### PKCS#12 File
+```go
+tlsConfig := client.NewTLSConfigFromP12File(
+    "/path/to/cert.p12",
+    client.DefaultPasswordCallbacks.TerminalPrompt,
+)
+```
+
+### PKCS#12 Data in Memory
+```go
+tlsConfig := client.NewTLSConfigFromP12Bytes(
+    p12Data,     // []byte
+    passwordFn,  // func() (string, error)
+)
+```
+
+## Password Callback Options
+
+### Built-in Callbacks
+```go
+// Terminal prompt (secure input)
+client.DefaultPasswordCallbacks.TerminalPrompt
+
+// Environment variable
+client.DefaultPasswordCallbacks.EnvVar("P12_PASSWORD")
+
+// Static password (not recommended for production)
+client.DefaultPasswordCallbacks.Static("my-password")
+```
+
+### Custom Callback
+```go
+customCallback := func() (string, error) {
+    // Your custom secure password retrieval logic
+    return getPasswordSecurely(), nil
+}
 ```
 
 ## Testing
@@ -215,7 +308,6 @@ go test ./...
 ```
 
 For verbose output:
-
 ```bash
 go test -v ./...
 ```
