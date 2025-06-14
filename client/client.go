@@ -116,12 +116,12 @@ func (tc *TLSConfig) configureTLSFromP12(tlsConfig *tls.Config) (*tls.Config, er
 		Type:  "CERTIFICATE",
 		Bytes: certificate.Raw,
 	})
-	
+
 	// Handle different private key types
 	var keyPEM []byte
 	var keyType string
 	var keyBytes []byte
-	
+
 	switch key := privateKey.(type) {
 	case *rsa.PrivateKey:
 		keyType = "RSA PRIVATE KEY"
@@ -141,7 +141,7 @@ func (tc *TLSConfig) configureTLSFromP12(tlsConfig *tls.Config) (*tls.Config, er
 			return nil, fmt.Errorf("failed to marshal private key: %w", err)
 		}
 	}
-	
+
 	keyPEM = pem.EncodeToMemory(&pem.Block{
 		Type:  keyType,
 		Bytes: keyBytes,
@@ -150,7 +150,7 @@ func (tc *TLSConfig) configureTLSFromP12(tlsConfig *tls.Config) (*tls.Config, er
 	if certPEM == nil || keyPEM == nil {
 		return nil, fmt.Errorf("P12 file missing required certificate or private key")
 	}
-	
+
 	// Convert CA certificates to PEM format
 	var caCertsPEM [][]byte
 	for _, caCert := range caCerts {
