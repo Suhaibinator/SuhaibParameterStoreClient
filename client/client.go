@@ -394,21 +394,34 @@ func WithTLS(tlsConfig *TLSConfig) ClientOption {
 // Retrieve fetches a value for the given key using the provided secret.
 // It automatically uses mTLS if certificate sources are properly configured.
 func (c *Client) Retrieve(key, secret string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
-	defer cancel()
-
 	serverAddress := fmt.Sprintf("%s:%v", c.Host, c.Port)
 
 	var (
 		value string
 		err   error
+		ctx   context.Context
+		cancel context.CancelFunc
 	)
 
 	useTLS := c.TLSConfig != nil && c.TLSConfig.IsConfigured()
 
 	if useTLS {
-		value, err = GrpcSimpleRetrieveWithTLS(ctx, serverAddress, secret, key, c.TLSConfig)
+		// Pre-configure TLS outside of timeout context to allow for password input
+		tlsConf, err := c.TLSConfig.GetTLSConfig()
+		if err != nil {
+			return "", fmt.Errorf("failed to get TLS configuration: %w", err)
+		}
+		
+		// Now create timeout context for network operations only
+		ctx, cancel = context.WithTimeout(context.Background(), c.Timeout)
+		defer cancel()
+		
+		value, err = GrpcSimpleRetrieveWithPrebuiltTLS(ctx, serverAddress, secret, key, tlsConf)
 	} else {
+		// Create timeout context for network operations
+		ctx, cancel = context.WithTimeout(context.Background(), c.Timeout)
+		defer cancel()
+		
 		value, err = GrpcSimpleRetrieve(ctx, serverAddress, secret, key)
 	}
 
@@ -422,18 +435,33 @@ func (c *Client) Retrieve(key, secret string) (string, error) {
 // Store stores a key-value pair in the parameter store.
 // It automatically uses mTLS if certificate sources are properly configured.
 func (c *Client) Store(key, secret, value string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
-	defer cancel()
-
 	serverAddress := fmt.Sprintf("%s:%v", c.Host, c.Port)
 
-	var err error
+	var (
+		err error
+		ctx context.Context
+		cancel context.CancelFunc
+	)
 
 	useTLS := c.TLSConfig != nil && c.TLSConfig.IsConfigured()
 
 	if useTLS {
-		err = GrpcSimpleStoreWithTLS(ctx, serverAddress, secret, key, value, c.TLSConfig)
+		// Pre-configure TLS outside of timeout context to allow for password input
+		tlsConf, err := c.TLSConfig.GetTLSConfig()
+		if err != nil {
+			return fmt.Errorf("failed to get TLS configuration: %w", err)
+		}
+		
+		// Now create timeout context for network operations only
+		ctx, cancel = context.WithTimeout(context.Background(), c.Timeout)
+		defer cancel()
+		
+		err = GrpcSimpleStoreWithPrebuiltTLS(ctx, serverAddress, secret, key, value, tlsConf)
 	} else {
+		// Create timeout context for network operations
+		ctx, cancel = context.WithTimeout(context.Background(), c.Timeout)
+		defer cancel()
+		
 		err = GrpcSimpleStore(ctx, serverAddress, secret, key, value)
 	}
 

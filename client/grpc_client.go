@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"time"
@@ -195,6 +196,98 @@ func GrpcSimpleStoreWithTLS(ctx context.Context, ServerAddress string, Authentic
 	if err != nil {
 		log.Printf("Failed to get TLS configuration: %v", err)
 		return fmt.Errorf("failed to get TLS configuration: %w", err)
+	}
+
+	creds := credentials.NewTLS(tlsConf)
+
+	// Default options: TLS credentials.
+	defaultOpts := []grpc.DialOption{
+		grpc.WithTransportCredentials(creds),
+	}
+	// Append any additional options passed by the caller.
+	allOpts := append(defaultOpts, opts...)
+
+	// Establish connection using the helper dial function.
+	var conn *grpc.ClientConn
+	conn, err = dial(ctx, ServerAddress, allOpts...)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Create a new client
+	client := pb.NewParameterStoreClient(conn)
+
+	// Store a value
+	storeReq := &pb.StoreRequest{
+		Key:      key,
+		Value:    value,
+		Password: AuthenticationPassword,
+	}
+	storeResp, err := client.Store(ctx, storeReq)
+	if err != nil {
+		log.Printf("could not store value for key '%s': %v", key, err)
+		return fmt.Errorf("gRPC store call failed: %w", err)
+	}
+	log.Printf("Store response for key '%s': %s", key, storeResp.GetMessage())
+	return nil
+}
+
+// GrpcSimpleRetrieveWithPrebuiltTLS retrieves a value from the parameter store using gRPC with pre-built TLS config.
+// This version accepts a pre-built *tls.Config to avoid password prompts within timeout context.
+func GrpcSimpleRetrieveWithPrebuiltTLS(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, tlsConf *tls.Config, opts ...grpc.DialOption) (val string, err error) {
+	// Ensure context has a deadline.
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultGrpcTimeout)
+		defer cancel()
+	}
+
+	creds := credentials.NewTLS(tlsConf)
+
+	// Default options: TLS credentials.
+	defaultOpts := []grpc.DialOption{
+		grpc.WithTransportCredentials(creds),
+	}
+	// Append any additional options passed by the caller.
+	allOpts := append(defaultOpts, opts...)
+
+	// Establish connection using the helper dial function.
+	var conn *grpc.ClientConn
+	conn, err = dial(ctx, ServerAddress, allOpts...)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	// Create a new client
+	client := pb.NewParameterStoreClient(conn)
+
+	// Retrieve the stored value using the provided context
+	retrieveReq := &pb.RetrieveRequest{
+		Key:      key,
+		Password: AuthenticationPassword,
+	}
+	retrieveResp, err := client.Retrieve(ctx, retrieveReq)
+	if err != nil {
+		log.Printf("could not retrieve value for key '%s': %v", key, err)
+		return "", fmt.Errorf("gRPC retrieve call failed: %w", err)
+	}
+	if retrieveResp == nil {
+		log.Printf("received nil response for key '%s'", key)
+		return "", fmt.Errorf("received nil response from gRPC server for key '%s'", key)
+	}
+	return retrieveResp.GetValue(), nil
+}
+
+// GrpcSimpleStoreWithPrebuiltTLS stores a key-value pair using gRPC with pre-built TLS config.
+// This version accepts a pre-built *tls.Config to avoid password prompts within timeout context.
+func GrpcSimpleStoreWithPrebuiltTLS(ctx context.Context, ServerAddress string, AuthenticationPassword string, key string, value string, tlsConf *tls.Config, opts ...grpc.DialOption) (err error) {
+	// Ensure context has a deadline.
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultGrpcTimeout)
+		defer cancel()
 	}
 
 	creds := credentials.NewTLS(tlsConf)
